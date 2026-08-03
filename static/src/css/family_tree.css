@@ -1,0 +1,1786 @@
+/* Family Tree View - Professional Layout */
+
+.o_family_tree_view {
+    width: 100%;
+    height: 100%;
+    overflow: hidden; /* Hidden pour le pan/zoom */
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    position: relative;
+    cursor: grab;
+}
+
+.o_family_tree_view.panning {
+    cursor: grabbing;
+}
+
+.o_family_tree_wrapper {
+    position: relative;
+    min-width: 100%;
+    min-height: 100%;
+    transition: transform 0.05s linear;
+    transform-origin: 0 0;
+    will-change: transform;
+}
+
+.o_family_tree_wrapper.panning {
+    transition: none;
+}
+
+/* SVG layer for curved branches */
+.o_tree_svg_container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 0;
+    overflow: visible;
+}
+
+.o_tree_svg_container svg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+}
+
+.o_tree_svg_container path {
+    fill: none;
+    stroke-width: 2.5;
+    stroke-linecap: round;
+}
+
+.o_tree_svg_container path.branch-company { stroke: #1e3a8a; }
+.o_tree_svg_container path.branch-subsidiary { stroke: #3b82f6; }
+.o_tree_svg_container path.branch-contact { stroke: #10b981; }
+.o_tree_svg_container path.branch-invoice { stroke: #0ea5e9; }
+.o_tree_svg_container path.branch-delivery { stroke: #f97316; }
+.o_tree_svg_container path.branch-other { stroke: #6b7280; }
+
+.o_family_tree_container {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start; /* Aligné à gauche */
+    justify-content: flex-start; /* Aligné en haut */
+    min-width: 100%;
+    min-height: 100%;
+    padding: 40px 60px;
+    z-index: 1;
+}
+
+/* Tree Structure */
+.o_tree_node {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    z-index: 1;
+}
+
+/* Children container - companies below, contacts to right */
+.o_tree_children {
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-start;
+    align-items: flex-start;
+    gap: 40px;
+    margin-top: 70px;
+    position: relative;
+    flex-wrap: wrap;
+}
+
+/* Company nodes stay in column flow */
+.o_tree_children > .o_tree_node.is_company_node {
+    margin-left: 25px;
+    margin-right: 25px;
+}
+
+/* Contact/Address nodes - horizontal layout to the right */
+.o_tree_children > .o_tree_node:not(.is_company_node) {
+    margin-left: 10px;
+    margin-right: 10px;
+}
+
+/* When there's a mix, organize them */
+.o_tree_children {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, max-content));
+    justify-content: center;
+    gap: 35px 45px;
+    margin-top: 70px;
+}
+
+/* ========== NEW LAYOUT: Contacts to RIGHT, Subsidiaries BELOW ========== */
+
+/* Main node wrapper */
+.o_tree_node {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    position: relative;
+    z-index: 1;
+}
+
+/* Row: Card on left, Children container on right - CARTE CENTRÉE */
+.o_tree_node_row {
+    display: flex;
+    flex-direction: row;
+    align-items: center; /* CENTRER verticalement la carte par rapport aux enfants */
+    gap: 0;
+}
+
+/* Column: Card only */
+.o_tree_node_column {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 280px;
+    justify-content: center; /* Centrer la carte dans sa colonne */
+}
+
+/* Container for all children on the RIGHT (contacts + subsidiaries) */
+.o_tree_children_right_container {
+    display: flex;
+    flex-direction: column;
+    gap: 35px;
+    margin-left: 100px;
+    padding-top: 0;
+    position: relative;
+    align-items: flex-start;
+    justify-content: center; /* Centrer les enfants verticalement */
+}
+
+/* Contacts container - at the TOP RIGHT */
+.o_tree_contacts_right {
+    display: flex;
+    flex-direction: column;
+    gap: 25px;
+    position: relative;
+    align-items: flex-start;
+    min-width: 200px;
+}
+
+/* Subsidiaries container - at the BOTTOM RIGHT (below contacts) */
+.o_tree_subsidiaries_right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 35px;
+    margin-left: 0;
+    padding-left: 0;
+}
+
+/* Each subsidiary can have its own children to the right */
+.o_tree_subsidiaries_right > .o_tree_node {
+    width: 100%;
+}
+}
+
+/* Remove old styles */
+.o_tree_subsidiaries_below {
+    display: none;
+}
+
+/* Remove old children styles */
+.o_tree_children {
+    display: none;
+}
+
+/* Hide old CSS connector lines */
+.o_tree_node > .o_tree_children::before,
+.o_tree_children > .o_tree_node::before,
+.o_tree_children::after {
+    display: none !important;
+}
+
+/* ========== PARTNER CARDS ========== */
+.o_partner_card {
+    background: white;
+    border-radius: 12px;
+    padding: 14px 16px;
+    min-width: 220px;
+    max-width: 280px;
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.08);
+    cursor: pointer;
+    transition: all 0.25s ease;
+    border: none;
+    border-left: 5px solid #a0a0a0;
+    position: relative;
+}
+
+.o_partner_card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
+}
+
+/* Carte highlighted (depuis recherche) - STYLE SOBRE ET ÉLÉGANT */
+.o_partner_card.highlighted {
+    border: 2px solid #6366f1; /* Indigo doux */
+    border-left: 5px solid #6366f1;
+    background: linear-gradient(135deg, #ffffff 0%, #eef2ff 100%); /* Fond indigo très léger */
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15), 0 8px 20px rgba(99, 102, 241, 0.12);
+    transform: scale(1.02);
+}
+
+.o_partner_card.highlighted::before {
+    content: "📍 Vous êtes ici";
+    position: absolute;
+    top: -26px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #6366f1;
+    color: white;
+    padding: 4px 12px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+    box-shadow: 0 2px 6px rgba(99, 102, 241, 0.35);
+    z-index: 10;
+}
+
+/* Carte selected (clic) */
+.o_partner_card.selected {
+    border-left-color: #3b82f6;
+    border-left-width: 5px;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3), 0 8px 25px rgba(59, 130, 246, 0.2);
+    background: linear-gradient(135deg, #ffffff 0%, #f0f9ff 100%);
+}
+
+/* Company cards - larger */
+.o_partner_card.is_company {
+    min-width: 260px;
+    max-width: 320px;
+    padding: 16px 18px;
+}
+
+/* Contact cards - smaller and compact */
+.o_partner_card.is_contact {
+    min-width: 180px;
+    max-width: 240px;
+    padding: 10px 14px;
+}
+
+.o_partner_card.is_contact .o_partner_card_header {
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.o_partner_card.is_contact .o_partner_avatar,
+.o_partner_card.is_contact .o_partner_avatar_placeholder {
+    width: 36px;
+    height: 36px;
+    font-size: 12px;
+}
+
+.o_partner_card.is_contact .o_partner_name {
+    font-size: 13px;
+}
+
+.o_partner_card.is_contact .o_partner_function {
+    font-size: 11px;
+}
+
+.o_partner_card.is_contact .o_partner_card_body {
+    font-size: 11px;
+    padding-top: 8px;
+    margin-top: 4px;
+}
+
+.o_partner_card.is_contact .o_partner_email,
+.o_partner_card.is_contact .o_partner_phone,
+.o_partner_card.is_contact .o_partner_address {
+    margin-top: 4px;
+    gap: 8px;
+}
+
+/* ========== COMPANY CARDS - Blue gradient by depth ========== */
+.o_tree_node[data-depth="0"] > .o_tree_node_row > .o_tree_node_column > .o_partner_card.is_company,
+.o_tree_node:not([data-depth]) > .o_tree_node_row > .o_tree_node_column > .o_partner_card.is_company {
+    border-left: 5px solid #1e3a8a;
+    min-width: 280px;
+}
+
+.o_tree_node[data-depth="1"] > .o_tree_node_row > .o_tree_node_column > .o_partner_card.is_company {
+    border-left: 5px solid #2563eb;
+}
+
+.o_tree_node[data-depth="2"] > .o_tree_node_row > .o_tree_node_column > .o_partner_card.is_company {
+    border-left: 5px solid #3b82f6;
+}
+
+.o_tree_node[data-depth="3"] > .o_tree_node_row > .o_tree_node_column > .o_partner_card.is_company {
+    border-left: 5px solid #60a5fa;
+}
+
+.o_tree_node[data-depth="4"] > .o_tree_node_row > .o_tree_node_column > .o_partner_card.is_company,
+.o_tree_node[data-depth="5"] > .o_tree_node_row > .o_tree_node_column > .o_partner_card.is_company {
+    border-left: 5px solid #06b6d4;
+}
+
+.o_partner_card.is_company {
+    border-left: 5px solid #22d3d1;
+}
+
+.o_partner_card.is_company .o_partner_avatar_placeholder {
+    background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+    color: white;
+}
+
+/* ========== CONTACT TYPE CARDS ========== */
+.o_partner_card.is_contact.type-contact {
+    border-left: 4px solid #10b981;
+    background: linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%);
+}
+
+.o_partner_card.is_contact.type-invoice {
+    border-left: 4px solid #0ea5e9;
+    background: linear-gradient(135deg, #ffffff 0%, #f0f9ff 100%);
+}
+
+.o_partner_card.is_contact.type-delivery {
+    border-left: 4px solid #f97316;
+    background: linear-gradient(135deg, #ffffff 0%, #fff7ed 100%);
+}
+
+.o_partner_card.is_contact.type-other {
+    border-left: 4px solid #6b7280;
+    background: linear-gradient(135deg, #ffffff 0%, #f9fafb 100%);
+}
+
+/* ========== SELECTED CARD (clicked) ========== */
+.o_partner_card.selected {
+    border: 3px solid #3b82f6;
+    border-left: 6px solid #3b82f6;
+    box-shadow: 
+        0 0 0 4px rgba(59, 130, 246, 0.12),
+        0 12px 35px rgba(59, 130, 246, 0.18);
+    transform: scale(1.02);
+    background: linear-gradient(135deg, #ffffff 0%, #eff6ff 100%);
+}
+
+.o_partner_card.selected::after {
+    content: "✓ Sélectionné";
+    position: absolute;
+    top: -28px;
+    right: -5px;
+    background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);
+    color: white;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 12px;
+    border-radius: 12px;
+    white-space: nowrap;
+    box-shadow: 0 3px 10px rgba(59, 130, 246, 0.3);
+    letter-spacing: 0.2px;
+}
+
+/* ========== CARD CONTENT ========== */
+.o_partner_card_header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 12px;
+}
+
+.o_partner_avatar {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: #e9ecef;
+    flex-shrink: 0;
+    border: 2px solid white;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
+
+.o_partner_avatar_placeholder {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 600;
+    flex-shrink: 0;
+    color: white;
+    border: 2px solid white;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
+
+.o_partner_info { flex: 1; min-width: 0; }
+
+.o_partner_name {
+    font-size: 15px;
+    font-weight: 600;
+    color: #1e293b;
+    margin-bottom: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.o_partner_function {
+    font-size: 12px;
+    color: #64748b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.o_partner_card_body {
+    font-size: 12px;
+    color: #64748b;
+    border-top: 1px solid rgba(0,0,0,0.06);
+    padding-top: 10px;
+    margin-top: 6px;
+}
+
+.o_partner_email,
+.o_partner_phone,
+.o_partner_address {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.o_partner_email i,
+.o_partner_phone i,
+.o_partner_address i {
+    font-size: 11px;
+    width: 16px;
+    text-align: center;
+    color: #94a3b8;
+}
+
+/* ========== EXPAND TOGGLE - SUBSIDIARIES (right, blue) ========== */
+.o_expand_toggle.o_expand_subsidiaries {
+    position: absolute;
+    top: 70%;
+    right: -12px;
+    transform: translateY(-50%);
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);
+    color: white;
+    border: 2px solid white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.35);
+    transition: all 0.2s ease;
+    z-index: 10;
+}
+
+.o_expand_toggle.o_expand_subsidiaries:hover { transform: translateY(-50%) scale(1.1); }
+.o_expand_toggle.o_expand_subsidiaries.collapsed i { transform: rotate(0deg); transition: transform 0.2s ease; }
+.o_expand_toggle.o_expand_subsidiaries.expanded i { transform: rotate(90deg); transition: transform 0.2s ease; }
+
+/* ========== EXPAND TOGGLE - CONTACTS (right, green) ========== */
+.o_expand_toggle.o_expand_contacts {
+    position: absolute;
+    top: 50%;
+    right: -12px;
+    transform: translateY(-50%);
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
+    color: white;
+    border: 2px solid white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.35);
+    transition: all 0.2s ease;
+    z-index: 10;
+}
+
+.o_expand_toggle.o_expand_contacts:hover { transform: translateY(-50%) scale(1.1); }
+.o_expand_toggle.o_expand_contacts.collapsed i { transform: rotate(0deg); transition: transform 0.2s ease; }
+.o_expand_toggle.o_expand_contacts.expanded i { transform: rotate(90deg); transition: transform 0.2s ease; }
+
+/* Hide generic expand toggle */
+.o_expand_toggle:not(.o_expand_subsidiaries):not(.o_expand_contacts) {
+    display: none;
+}
+
+/* Count badge on toggle buttons */
+.o_expand_toggle .o_toggle_count {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    background: #ef4444;
+    color: white;
+    font-size: 9px;
+    font-weight: 700;
+    min-width: 14px;
+    height: 14px;
+    border-radius: 7px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid white;
+}
+
+/* ========== ADD CHILD BUTTON ========== */
+.o_add_child_btn {
+    position: absolute;
+    bottom: -12px;
+    right: 10px;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
+    color: white;
+    border: 2px solid white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.35);
+    transition: all 0.2s ease;
+    z-index: 15;
+    opacity: 0;
+    transform: scale(0.8);
+}
+
+.o_partner_card:hover .o_add_child_btn { opacity: 1; transform: scale(1); }
+.o_add_child_btn:hover { transform: scale(1.15) !important; }
+
+/* ========== DRAG HANDLE (Reorganize Mode) ========== */
+.o_drag_handle {
+    position: absolute;
+    top: 50%;
+    right: -20px;
+    transform: translateY(-50%);
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    color: white;
+    border: 3px solid white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    cursor: grab;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+    z-index: 20;
+}
+
+.o_drag_handle:hover { transform: translateY(-50%) scale(1.1); }
+.o_drag_handle:active { cursor: grabbing; }
+
+/* ========== CHANGE PARENT BUTTON ========== */
+.o_change_parent_btn {
+    position: absolute;
+    bottom: -12px;
+    left: 10px;
+    height: 24px;
+    padding: 0 8px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
+    color: white;
+    border: 2px solid white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    font-size: 10px;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(245, 158, 11, 0.35);
+    transition: all 0.2s ease;
+    z-index: 15;
+    opacity: 0;
+    transform: scale(0.8);
+}
+
+.o_change_parent_btn .o_arrow_icon { font-size: 8px; }
+.o_partner_card:hover .o_change_parent_btn { opacity: 1; transform: scale(1); }
+.o_change_parent_btn:hover { transform: scale(1.05) !important; }
+
+/* ========== OPEN RECORD BUTTON (now top right) ========== */
+.o_open_record_btn {
+    position: absolute;
+    top: -12px;
+    right: 10px;
+    height: 26px;
+    width: 26px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+    color: white;
+    border: 2px solid white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.35);
+    transition: all 0.2s ease;
+    z-index: 15;
+    opacity: 0;
+    transform: scale(0.8);
+}
+
+.o_partner_card:hover .o_open_record_btn { opacity: 1; transform: scale(1); }
+.o_open_record_btn:hover { transform: scale(1.15) !important; background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%); }
+
+/* ========== CREATE QUOTE BUTTON (now bottom center) ========== */
+.o_create_quote_btn {
+    position: absolute;
+    bottom: -12px;
+    left: 50%;
+    transform: translateX(-50%) scale(0.8);
+    height: 24px;
+    width: 24px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    color: white;
+    border: 2px solid white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4);
+    transition: all 0.2s ease;
+    z-index: 15;
+    opacity: 0;
+}
+
+.o_partner_card:hover .o_create_quote_btn { opacity: 1; transform: translateX(-50%) scale(1); }
+.o_create_quote_btn:hover { transform: translateX(-50%) scale(1.15) !important; background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); }
+
+
+/* ========== ADD MENU ========== */
+.o_add_menu {
+    position: fixed;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05);
+    padding: 8px 0;
+    min-width: 200px;
+    z-index: 10000; /* Élevé pour passer au-dessus de tout */
+    display: none;
+}
+
+.o_add_menu.visible {
+    display: block;
+    animation: menuSlide 0.2s ease-out;
+}
+
+@keyframes menuSlide {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.o_add_menu_item {
+    padding: 12px 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 14px;
+    color: #1e293b;
+    transition: background 0.15s ease;
+}
+
+.o_add_menu_item:hover { background: #f8fafc; }
+
+.o_add_menu_item i {
+    width: 26px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    font-size: 12px;
+    color: white;
+}
+
+.o_add_menu_item.type-contact i { background: #10b981; }
+.o_add_menu_item.type-invoice i { background: #0ea5e9; }
+.o_add_menu_item.type-delivery i { background: #f97316; }
+.o_add_menu_item.type-other i { background: #6b7280; }
+.o_add_menu_item.type-subsidiary i { background: #1e3a8a; }
+
+/* ========== BADGES ========== */
+.o_children_count {
+    position: absolute;
+    top: -10px;
+    right: -10px;
+    background: linear-gradient(135deg, #ef4444 0%, #f87171 100%);
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 10px;
+    min-width: 20px;
+    text-align: center;
+    border: 2px solid white;
+    box-shadow: 0 2px 6px rgba(239, 68, 68, 0.3);
+}
+
+.o_company_badge {
+    position: absolute;
+    top: -10px;
+    left: 12px;
+    background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+    color: white;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border: 2px solid white;
+    box-shadow: 0 2px 6px rgba(30, 58, 138, 0.3);
+}
+
+.o_company_badge.subsidiary {
+    background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);
+}
+
+.o_type_badge {
+    position: absolute;
+    top: -10px;
+    left: 12px;
+    color: white;
+    font-size: 9px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 10px;
+    border: 2px solid white;
+}
+
+.o_type_badge.type-contact { 
+    background: linear-gradient(135deg, #10b981 0%, #34d399 100%); 
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+}
+.o_type_badge.type-invoice { 
+    background: linear-gradient(135deg, #0ea5e9 0%, #38bdf8 100%); 
+    box-shadow: 0 2px 8px rgba(14, 165, 233, 0.3);
+}
+.o_type_badge.type-delivery { 
+    background: linear-gradient(135deg, #f97316 0%, #fb923c 100%); 
+    box-shadow: 0 2px 8px rgba(249, 115, 22, 0.3);
+}
+.o_type_badge.type-other { 
+    background: linear-gradient(135deg, #6b7280 0%, #9ca3af 100%); 
+    box-shadow: 0 2px 8px rgba(107, 114, 128, 0.3);
+}
+
+/* ========== REORGANIZE MODE ========== */
+.o_family_tree_container.reorganize-mode {
+    background: 
+        repeating-linear-gradient(0deg, transparent, transparent 25px, rgba(99, 102, 241, 0.04) 25px, rgba(99, 102, 241, 0.04) 26px),
+        repeating-linear-gradient(90deg, transparent, transparent 25px, rgba(99, 102, 241, 0.04) 25px, rgba(99, 102, 241, 0.04) 26px);
+}
+
+.reorganize-mode .o_tree_node { transition: none; }
+.reorganize-mode .o_tree_node.dragging { z-index: 1000 !important; }
+.reorganize-mode .o_tree_node.dragging .o_partner_card {
+    box-shadow: 0 20px 50px rgba(99, 102, 241, 0.35);
+    transform: scale(1.03);
+}
+.reorganize-mode .o_partner_card { cursor: default; }
+
+/* ========== STATES ========== */
+.o_family_tree_empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: #64748b;
+    padding: 80px;
+    text-align: center;
+}
+
+.o_family_tree_empty i { font-size: 70px; color: #cbd5e1; margin-bottom: 25px; }
+.o_family_tree_empty h3 { margin-bottom: 12px; color: #1e293b; font-weight: 600; font-size: 20px; }
+
+.o_family_tree_loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+}
+
+.o_family_tree_loading .spinner {
+    width: 45px;
+    height: 45px;
+    border: 4px solid #e2e8f0;
+    border-top-color: #6366f1;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ========== ÉCRAN D'ACCUEIL (Welcome Screen) ========== */
+.o_family_tree_welcome {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: #64748b;
+    padding: 60px 40px;
+    text-align: center;
+    background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+}
+
+.o_welcome_icon {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 30px;
+    box-shadow: 0 10px 40px rgba(99, 102, 241, 0.15);
+}
+
+.o_welcome_icon i {
+    font-size: 50px;
+    color: #6366f1;
+}
+
+.o_family_tree_welcome h2 {
+    margin-bottom: 12px;
+    color: #1e293b;
+    font-weight: 700;
+    font-size: 28px;
+}
+
+.o_family_tree_welcome p {
+    font-size: 16px;
+    color: #64748b;
+    max-width: 400px;
+}
+
+.o_welcome_actions {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    margin-top: 20px;
+}
+
+.o_welcome_hint {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 24px;
+    background: white;
+    border: 2px dashed #cbd5e1;
+    border-radius: 12px;
+    color: #64748b;
+    font-size: 15px;
+}
+
+.o_welcome_hint i {
+    color: #94a3b8;
+}
+
+.o_welcome_or {
+    color: #94a3b8;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.o_welcome_btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 28px;
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+}
+
+.o_welcome_btn:hover {
+    background: linear-gradient(135deg, #059669 0%, #047857 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+}
+
+.o_welcome_btn:active {
+    transform: translateY(0);
+}
+
+/* ========== TOOLBAR (Barre supérieure) ========== */
+.o_family_tree_toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 20px;
+    background: white;
+    border-bottom: 1px solid #e2e8f0;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    gap: 20px;
+}
+
+.o_toolbar_left {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    max-width: 700px;
+    position: relative;
+    gap: 12px;
+}
+
+/* Bouton création contact */
+.o_btn_create_contact {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+    border: none;
+    padding: 10px 16px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 6px rgba(16, 185, 129, 0.25);
+}
+
+.o_btn_create_contact:hover {
+    background: linear-gradient(135deg, #059669 0%, #047857 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
+}
+
+.o_btn_create_contact:active {
+    transform: translateY(0);
+}
+
+.o_btn_create_contact i {
+    font-size: 12px;
+}
+
+.o_toolbar_right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+/* Search Container */
+.o_search_container {
+    position: relative;
+    width: 100%;
+    display: flex;
+    align-items: center;
+}
+
+.o_search_icon {
+    position: absolute;
+    left: 12px;
+    color: #94a3b8;
+    font-size: 14px;
+    pointer-events: none;
+}
+
+.o_search_input {
+    width: 100%;
+    padding: 10px 36px 10px 36px;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    font-size: 14px;
+    background: #f8fafc;
+    transition: all 0.2s ease;
+}
+
+.o_search_input:focus {
+    outline: none;
+    border-color: #3b82f6;
+    background: white;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.o_search_input::placeholder {
+    color: #94a3b8;
+}
+
+.o_search_clear {
+    position: absolute;
+    right: 8px;
+    width: 24px;
+    height: 24px;
+    border: none;
+    background: #e2e8f0;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #64748b;
+    transition: all 0.2s ease;
+}
+
+.o_search_clear:hover {
+    background: #cbd5e1;
+    color: #334155;
+}
+
+/* Badge du partenaire sélectionné */
+.o_selected_partner_badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #6366f1;
+    color: white;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    margin-left: 12px;
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+    white-space: nowrap;
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.o_selected_partner_badge i {
+    font-size: 12px;
+}
+
+/* Search Results Dropdown */
+.o_search_results {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    margin-top: 4px;
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+    max-height: 400px;
+    overflow-y: auto;
+    z-index: 1000;
+}
+
+.o_search_result_item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 16px;
+    cursor: pointer;
+    transition: background 0.2s ease;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.o_search_result_item:last-child {
+    border-bottom: none;
+}
+
+.o_search_result_item:hover {
+    background: #f8fafc;
+}
+
+.o_search_result_item > i {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    font-size: 12px;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.o_search_result_item i.fa-building {
+    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+    color: white;
+}
+
+.o_search_result_item i.fa-user {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+}
+
+.o_search_result_item i.fa-file-text-o {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    color: white;
+}
+
+.o_search_result_item i.fa-truck {
+    background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+    color: white;
+}
+
+.o_result_content {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+    flex: 1;
+}
+
+.o_result_name {
+    font-weight: 600;
+    color: #1e293b;
+    font-size: 14px;
+}
+
+.o_result_path {
+    color: #64748b;
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.o_result_parent {
+    color: #94a3b8;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.o_result_parent i {
+    background: none !important;
+    color: #94a3b8 !important;
+    width: auto;
+    height: auto;
+    font-size: 10px;
+}
+
+/* Root Select */
+.o_root_select {
+    padding: 8px 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 13px;
+    background: white;
+    cursor: pointer;
+    min-width: 150px;
+}
+
+.o_root_select:focus {
+    outline: none;
+    border-color: #3b82f6;
+}
+
+/* Toolbar Groups */
+.o_toolbar_group {
+    display: flex;
+    align-items: center;
+    background: white;
+    border-radius: 10px;
+    padding: 4px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+    border: 1px solid #e2e8f0;
+}
+
+/* Toolbar Buttons - Base style */
+.o_toolbar_btn {
+    width: 38px;
+    height: 38px;
+    border: none;
+    background: transparent;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #64748b;
+    transition: all 0.2s ease;
+    font-size: 14px;
+}
+
+.o_toolbar_btn:hover {
+    background: #f1f5f9;
+    color: #334155;
+}
+
+.o_toolbar_btn:active {
+    transform: scale(0.95);
+}
+
+/* Boutons de niveau -1/+1 - Bleu */
+.o_btn_level {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    color: white !important;
+    width: 36px;
+    height: 36px;
+    box-shadow: 0 2px 6px rgba(59, 130, 246, 0.3);
+}
+
+.o_btn_level:hover {
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
+    color: white !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(59, 130, 246, 0.4);
+}
+
+/* Boutons de zoom - Violet */
+.o_btn_zoom {
+    background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+    color: white !important;
+    width: 36px;
+    height: 36px;
+    box-shadow: 0 2px 6px rgba(139, 92, 246, 0.3);
+}
+
+.o_btn_zoom:hover {
+    background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%) !important;
+    color: white !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(139, 92, 246, 0.4);
+}
+
+.o_btn_reset {
+    background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+    box-shadow: 0 2px 6px rgba(99, 102, 241, 0.3);
+}
+
+.o_btn_reset:hover {
+    background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%) !important;
+    box-shadow: 0 4px 10px rgba(99, 102, 241, 0.4);
+}
+
+/* Zoom Group */
+.o_zoom_group {
+    gap: 4px;
+}
+
+.o_zoom_display {
+    min-width: 55px;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 700;
+    color: #1e293b;
+    padding: 0 4px;
+}
+
+/* Level Group (-1/+1 buttons) */
+.o_level_group {
+    gap: 6px;
+}
+
+.o_level_display {
+    min-width: 55px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 700;
+    color: #1e293b;
+    white-space: nowrap;
+    padding: 0 4px;
+}
+
+.o_level_btn_text {
+    font-weight: 700;
+    font-size: 14px;
+}
+
+/* Separator */
+.o_toolbar_separator {
+    width: 1px;
+    height: 28px;
+    background: #e2e8f0;
+    margin: 0 8px;
+}
+
+.o_toolbar_separator.o_separator_large {
+    margin: 0 16px;
+    height: 32px;
+    background: linear-gradient(180deg, transparent 0%, #cbd5e1 50%, transparent 100%);
+}
+
+/* Refresh Button - Vert */
+.o_refresh_btn {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+    color: white !important;
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3);
+}
+
+.o_refresh_btn:hover {
+    background: linear-gradient(135deg, #059669 0%, #047857 100%) !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(16, 185, 129, 0.4);
+}
+
+/* Search Highlight Animation */
+@keyframes searchPulse {
+    0%, 100% { box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.2); }
+    50% { box-shadow: 0 0 0 8px rgba(59, 130, 246, 0.1); }
+}
+
+.o_partner_card.search-highlight {
+    animation: searchPulse 0.5s ease-in-out 3;
+    border-color: #3b82f6 !important;
+}
+
+/* Zoom */
+.o_family_tree_container.zoom-50 { transform: scale(0.5); transform-origin: top left; }
+.o_family_tree_container.zoom-75 { transform: scale(0.75); transform-origin: top left; }
+.o_family_tree_container.zoom-100 { transform: scale(1); }
+.o_family_tree_container.zoom-125 { transform: scale(1.25); transform-origin: top left; }
+.o_family_tree_container.zoom-150 { transform: scale(1.5); transform-origin: top left; }
+
+/* Responsive */
+@media (max-width: 992px) {
+    .o_tree_children { gap: 30px; }
+    .o_partner_card { min-width: 220px; max-width: 280px; }
+}
+
+@media (max-width: 768px) {
+    .o_tree_children { flex-direction: column; align-items: center; gap: 50px; }
+    .o_partner_card { min-width: 200px; max-width: 300px; }
+    .o_family_tree_container { padding: 40px 20px; }
+}
+
+/* ===================== MODE FUSION ===================== */
+
+/* Bouton Mode Fusion dans la toolbar - Style distinct */
+.o_merge_btn {
+    display: flex !important;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px !important;
+    width: auto !important;
+    height: auto !important;
+    transition: all 0.2s ease;
+    background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%) !important;
+    border: none !important;
+    border-radius: 10px !important;
+    color: white !important;
+    box-shadow: 0 2px 8px rgba(245, 158, 11, 0.35);
+}
+
+.o_merge_btn:hover {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.45);
+    color: white !important;
+}
+
+.o_merge_btn .fa-code-fork {
+    font-size: 16px;
+}
+
+.o_merge_btn .o_merge_btn_text {
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.o_merge_btn.active {
+    background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%) !important;
+    box-shadow: 0 2px 10px rgba(220, 38, 38, 0.4);
+    animation: fusionPulse 1.5s ease-in-out infinite;
+}
+
+.o_merge_btn.active:hover {
+    background: linear-gradient(135deg, #b91c1c 0%, #991b1b 100%) !important;
+}
+
+@keyframes fusionPulse {
+    0%, 100% { box-shadow: 0 2px 10px rgba(220, 38, 38, 0.4); }
+    50% { box-shadow: 0 2px 20px rgba(220, 38, 38, 0.6); }
+}
+
+/* Bouton Créer Devis dans la toolbar */
+.o_quote_toolbar_btn {
+    display: flex !important;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px !important;
+    width: auto !important;
+    height: auto !important;
+    transition: all 0.2s ease;
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+    border: none !important;
+    border-radius: 10px !important;
+    color: white !important;
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.35);
+    margin-left: 8px;
+}
+
+.o_quote_toolbar_btn:hover {
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.45);
+    color: white !important;
+}
+
+.o_quote_toolbar_btn .fa-file-text-o {
+    font-size: 16px;
+}
+
+.o_quote_toolbar_btn .o_quote_btn_text {
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.o_quote_toolbar_btn.active {
+    background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%) !important;
+    box-shadow: 0 2px 10px rgba(30, 64, 175, 0.4);
+    animation: quotePulse 1.5s ease-in-out infinite;
+}
+
+.o_quote_toolbar_btn.active:hover {
+    background: linear-gradient(135deg, #1e3a8a 0%, #172554 100%) !important;
+}
+
+@keyframes quotePulse {
+    0%, 100% { box-shadow: 0 2px 10px rgba(30, 64, 175, 0.4); }
+    50% { box-shadow: 0 2px 20px rgba(30, 64, 175, 0.6); }
+}
+
+/* Checkbox de fusion sur les cartes */
+.o_merge_checkbox {
+    position: absolute;
+    top: -8px;
+    left: -8px;
+    width: 28px;
+    height: 28px;
+    background: white;
+    border: 2px solid #e2e8f0;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 20;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.o_merge_checkbox:hover {
+    border-color: #f59e0b;
+    transform: scale(1.1);
+}
+
+.o_merge_checkbox i {
+    font-size: 18px;
+    color: #94a3b8;
+}
+
+.o_merge_checkbox i.fa-check-square {
+    color: #f59e0b;
+}
+
+/* Carte sélectionnée pour fusion */
+.o_partner_card.merge-selected {
+    border: 3px solid #f59e0b !important;
+    box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.2), 0 8px 20px rgba(245, 158, 11, 0.15) !important;
+    background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%) !important;
+}
+
+/* Barre d'action de fusion en bas */
+.o_merge_action_bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+    color: white;
+    padding: 16px 30px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    z-index: 1000;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.2);
+    animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.o_merge_count {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 15px;
+    font-weight: 500;
+}
+
+.o_merge_count i {
+    font-size: 20px;
+    color: #f59e0b;
+}
+
+.o_merge_actions {
+    display: flex;
+    gap: 12px;
+}
+
+.o_merge_cancel_btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    border-radius: 8px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.o_merge_cancel_btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+.o_merge_confirm_btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 24px;
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    border: none;
+    color: white;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+}
+
+.o_merge_confirm_btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(245, 158, 11, 0.4);
+}
+
+.o_merge_confirm_btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* ========== QUOTE MODE ACTION BAR ========== */
+.o_quote_action_bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+    color: white;
+    padding: 16px 30px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    z-index: 1000;
+    box-shadow: 0 -4px 20px rgba(59, 130, 246, 0.3);
+    animation: slideUp 0.3s ease;
+}
+
+.o_quote_header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.o_quote_header i {
+    font-size: 22px;
+}
+
+.o_quote_step_indicator {
+    background: rgba(255, 255, 255, 0.2);
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.o_quote_selections {
+    display: flex;
+    gap: 16px;
+}
+
+.o_quote_selection_item {
+    background: rgba(255, 255, 255, 0.1);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    padding: 10px 16px;
+    min-width: 200px;
+    transition: all 0.2s ease;
+}
+
+.o_quote_selection_item.active {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: white;
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.3);
+}
+
+.o_quote_selection_item.selected {
+    background: rgba(16, 185, 129, 0.3);
+    border-color: #10b981;
+}
+
+.o_quote_selection_label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: rgba(255, 255, 255, 0.8);
+    margin-bottom: 4px;
+}
+
+.o_quote_selection_label i {
+    font-size: 12px;
+}
+
+.o_quote_selection_value {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.o_quote_selected_name {
+    font-size: 14px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 160px;
+}
+
+.o_quote_placeholder {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.5);
+    font-style: italic;
+}
+
+.o_quote_clear_btn {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 10px;
+    transition: all 0.2s;
+}
+
+.o_quote_clear_btn:hover {
+    background: #ef4444;
+}
+
+.o_quote_actions {
+    display: flex;
+    gap: 12px;
+}
+
+.o_quote_cancel_btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    border-radius: 8px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.o_quote_cancel_btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+.o_quote_confirm_btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 24px;
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    border: none;
+    color: white;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.o_quote_confirm_btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
+}
+
+.o_quote_confirm_btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* Quote mode - highlight cards that can be selected */
+.o_family_tree_view.quote-mode-active .o_partner_card {
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.o_family_tree_view.quote-mode-active .o_partner_card:hover {
+    transform: scale(1.02);
+    box-shadow: 0 8px 25px rgba(59, 130, 246, 0.3);
+    border-color: #3b82f6;
+}
+
+/* Hide the quote button when quote mode is active */
+.o_family_tree_view.quote-mode-active .o_create_quote_btn {
+    display: none !important;
+}

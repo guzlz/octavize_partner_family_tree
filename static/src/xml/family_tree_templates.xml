@@ -1,0 +1,554 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <!-- Override the KanbanView buttons template (optional extra buttons) -->
+    <t t-name="octavize_family_tree.KanbanView.Buttons" t-inherit="web.KanbanView.Buttons" t-inherit-mode="primary">
+        <!-- Keep default buttons -->
+    </t>
+
+    <!-- Main Controller Template - Override Kanban Controller -->
+    <t t-name="octavize_family_tree.FamilyTreeController" t-inherit="web.KanbanView" t-inherit-mode="primary">
+        <xpath expr="//Layout" position="replace">
+            <Layout display="display" className="model.useSampleModel ? 'o_view_sample_data' : ''">
+                <t t-set-slot="layout-buttons">
+                    <t t-call="web.KanbanView.Buttons"/>
+                </t>
+                <t t-set-slot="layout-actions"/>
+                <div t-att-class="'o_family_tree_view h-100 d-flex flex-column' + (familyTreeState.quoteMode ? ' quote-mode-active' : '')">
+                    <!-- BARRE D'OUTILS EN HAUT -->
+                    <t t-call="octavize_family_tree.FamilyTreeControls"/>
+                    
+                    <!-- Tree Content -->
+                    <div class="flex-grow-1 overflow-auto position-relative">
+                        <t t-if="familyTreeState.isLoading">
+                            <div class="o_family_tree_loading">
+                                <div class="spinner"/>
+                                <p class="mt-3 text-muted">Chargement...</p>
+                            </div>
+                        </t>
+                        <!-- Écran d'accueil si rien n'est sélectionné -->
+                        <t t-elif="!familyTreeState.selectedPartnerName and !familyTreeState.treeData">
+                            <div class="o_family_tree_welcome">
+                                <div class="o_welcome_icon">
+                                    <i class="fa fa-sitemap"/>
+                                </div>
+                                <h2>Arborescence des contacts</h2>
+                                <p class="text-muted mb-4">Recherchez un contact pour visualiser son arborescence hiérarchique.</p>
+                                <div class="o_welcome_actions">
+                                    <div class="o_welcome_hint">
+                                        <i class="fa fa-search"/>
+                                        <span>Utilisez la barre de recherche ci-dessus</span>
+                                    </div>
+                                    <div class="o_welcome_or">ou</div>
+                                    <button class="o_welcome_btn" t-on-click="onCreateContact">
+                                        <i class="fa fa-plus"/>
+                                        <span>Créer un nouveau contact</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </t>
+                        <t t-elif="!familyTreeState.treeData">
+                            <div class="o_family_tree_empty">
+                                <i class="fa fa-sitemap"/>
+                                <h3>Aucun contact trouvé</h3>
+                                <p class="text-muted">Il n'y a pas de contacts correspondant à votre recherche.</p>
+                            </div>
+                        </t>
+                        <t t-else="">
+                            <div class="o_family_tree_wrapper" 
+                                 t-on-mousedown="onPanStart"
+                                 t-on-wheel="onWheel"
+                                 t-att-class="panState.isPanning ? 'panning' : ''"
+                                 t-att-style="'transform: translate(' + familyTreeState.panX + 'px, ' + familyTreeState.panY + 'px)'">
+                                <!-- SVG Layer for curved branches -->
+                                <div class="o_tree_svg_container">
+                                    <svg id="treeSvg" t-ref="treeSvg"/>
+                                </div>
+                                <!-- Tree nodes -->
+                                <div t-att-class="getContainerClass()" t-ref="treeContainer">
+                                    <t t-call="octavize_family_tree.TreeNode">
+                                        <t t-set="node" t-value="familyTreeState.treeData"/>
+                                    </t>
+                                </div>
+                            </div>
+                            
+                            <!-- MENU GLOBAL - HORS du wrapper transformé -->
+                            <t t-if="familyTreeState.activeMenuNode">
+                                <div class="o_add_menu visible" 
+                                     t-att-style="'top: ' + familyTreeState.menuPosition.top + 'px; left: ' + familyTreeState.menuPosition.left + 'px;'">
+                                    <!-- For invoice/delivery addresses, only allow Contact -->
+                                    <t t-if="familyTreeState.activeMenuNode.record.type === 'invoice' or familyTreeState.activeMenuNode.record.type === 'delivery'">
+                                        <div class="o_add_menu_item type-contact" t-on-click.stop="() => this.onCreateChild(familyTreeState.activeMenuNode, 'contact')">
+                                            <i class="fa fa-user"/>
+                                            <span>Contact</span>
+                                        </div>
+                                    </t>
+                                    <!-- For companies, show all options -->
+                                    <t t-elif="familyTreeState.activeMenuNode.record.is_company">
+                                        <div class="o_add_menu_item type-contact" t-on-click.stop="() => this.onCreateChild(familyTreeState.activeMenuNode, 'contact')">
+                                            <i class="fa fa-user"/>
+                                            <span>Contact</span>
+                                        </div>
+                                        <div class="o_add_menu_item type-invoice" t-on-click.stop="() => this.onCreateChild(familyTreeState.activeMenuNode, 'invoice')">
+                                            <i class="fa fa-file-text"/>
+                                            <span>Adresse de facturation</span>
+                                        </div>
+                                        <div class="o_add_menu_item type-delivery" t-on-click.stop="() => this.onCreateChild(familyTreeState.activeMenuNode, 'delivery')">
+                                            <i class="fa fa-truck"/>
+                                            <span>Adresse de livraison</span>
+                                        </div>
+                                        <div class="o_add_menu_item type-subsidiary" t-on-click.stop="() => this.onCreateChild(familyTreeState.activeMenuNode, 'subsidiary')">
+                                            <i class="fa fa-building"/>
+                                            <span>Filiale</span>
+                                        </div>
+                                    </t>
+                                    <!-- For regular contacts, allow Contact + Invoice + Delivery -->
+                                    <t t-else="">
+                                        <div class="o_add_menu_item type-contact" t-on-click.stop="() => this.onCreateChild(familyTreeState.activeMenuNode, 'contact')">
+                                            <i class="fa fa-user"/>
+                                            <span>Contact</span>
+                                        </div>
+                                        <div class="o_add_menu_item type-invoice" t-on-click.stop="() => this.onCreateChild(familyTreeState.activeMenuNode, 'invoice')">
+                                            <i class="fa fa-file-text"/>
+                                            <span>Adresse de facturation</span>
+                                        </div>
+                                        <div class="o_add_menu_item type-delivery" t-on-click.stop="() => this.onCreateChild(familyTreeState.activeMenuNode, 'delivery')">
+                                            <i class="fa fa-truck"/>
+                                            <span>Adresse de livraison</span>
+                                        </div>
+                                    </t>
+                                </div>
+                            </t>
+                        </t>
+                    </div>
+                </div>
+            </Layout>
+        </xpath>
+    </t>
+
+    <!-- Family Tree Controls - Barre supérieure -->
+    <t t-name="octavize_family_tree.FamilyTreeControls">
+        <div class="o_family_tree_toolbar">
+            <!-- Partie gauche : Recherche + Création -->
+            <div class="o_toolbar_left">
+                <!-- Bouton création contact -->
+                <button class="o_btn_create_contact" t-on-click="onCreateContact" title="Créer un contact">
+                    <i class="fa fa-plus"/>
+                    <span>Nouveau contact</span>
+                </button>
+                
+                <div class="o_search_container">
+                    <i class="fa fa-search o_search_icon"/>
+                    <input type="text" 
+                           class="o_search_input" 
+                           placeholder="Rechercher un contact..."
+                           t-att-value="familyTreeState.searchQuery || ''"
+                           t-on-input="onSearchInput"
+                           t-on-keydown="onSearchKeydown"
+                           t-on-focus="onSearchFocus"/>
+                    <t t-if="familyTreeState.searchQuery">
+                        <button class="o_search_clear" t-on-click="onClearSearchFull">
+                            <i class="fa fa-times"/>
+                        </button>
+                    </t>
+                </div>
+                
+                <!-- Badge du contact sélectionné (seulement si différent de la recherche) -->
+                <t t-if="familyTreeState.selectedPartnerName and familyTreeState.searchQuery !== familyTreeState.selectedPartnerName">
+                    <div class="o_selected_partner_badge">
+                        <i class="fa fa-map-marker"/>
+                        <span t-esc="familyTreeState.selectedPartnerName"/>
+                    </div>
+                </t>
+                
+                <!-- Résultats de recherche -->
+                <t t-if="familyTreeState.searchResults and familyTreeState.searchResults.length > 0">
+                    <div class="o_search_results">
+                        <t t-foreach="familyTreeState.searchResults" t-as="result" t-key="result.id">
+                            <div class="o_search_result_item" 
+                                 t-att-data-result-id="result.id"
+                                 t-on-click="onClickSearchResult">
+                                <i t-att-class="'fa ' + (result.is_company ? 'fa-building' : (result.type === 'invoice' ? 'fa-file-text-o' : (result.type === 'delivery' ? 'fa-truck' : 'fa-user')))"/>
+                                <div class="o_result_content">
+                                    <span class="o_result_name" t-esc="result.display_name"/>
+                                    <t t-if="result.fullPath and result.fullPath !== result.display_name">
+                                        <span class="o_result_path">
+                                            <t t-esc="result.fullPath"/>
+                                        </span>
+                                    </t>
+                                </div>
+                            </div>
+                        </t>
+                    </div>
+                </t>
+            </div>
+            
+            <!-- Partie droite : Actions et Zoom -->
+            <div class="o_toolbar_right">
+                <!-- Expand/Collapse par niveau -->
+                <div class="o_toolbar_group o_level_group">
+                    <button class="o_toolbar_btn o_btn_level o_btn_minus" t-on-click="onCollapseOneLevel" title="Replier 1 niveau">
+                        <i class="fa fa-minus"/>
+                    </button>
+                    <span class="o_level_display">Niv. <t t-esc="familyTreeState.expandLevel"/></span>
+                    <button class="o_toolbar_btn o_btn_level o_btn_plus" t-on-click="onExpandOneLevel" title="Déplier 1 niveau">
+                        <i class="fa fa-plus"/>
+                    </button>
+                </div>
+                
+                <!-- Séparateur -->
+                <div class="o_toolbar_separator"/>
+                
+                <!-- Zoom Controls -->
+                <div class="o_toolbar_group o_zoom_group">
+                    <button class="o_toolbar_btn o_btn_zoom" t-on-click="onZoomOut" title="Zoom -">
+                        <i class="fa fa-search-minus"/>
+                    </button>
+                    <span class="o_zoom_display"><t t-esc="familyTreeState.zoomLevel"/>%</span>
+                    <button class="o_toolbar_btn o_btn_zoom" t-on-click="onZoomIn" title="Zoom +">
+                        <i class="fa fa-search-plus"/>
+                    </button>
+                    <button class="o_toolbar_btn o_btn_zoom o_btn_reset" t-on-click="onZoomReset" title="Réinitialiser">
+                        <i class="fa fa-crosshairs"/>
+                    </button>
+                </div>
+                
+                <!-- Séparateur large -->
+                <div class="o_toolbar_separator o_separator_large"/>
+                
+                <!-- Mode Fusion - Bouton distinct et visible -->
+                <button t-att-class="'o_toolbar_btn o_merge_btn' + (familyTreeState.mergeMode ? ' active' : '')" 
+                        t-on-click="onToggleMergeMode" 
+                        title="Activer/Désactiver le mode fusion de contacts">
+                    <i class="fa fa-code-fork"/>
+                    <span class="o_merge_btn_text">Fusion</span>
+                </button>
+                
+                <!-- Bouton Créer un devis -->
+                <button t-att-class="'o_toolbar_btn o_quote_toolbar_btn' + (familyTreeState.quoteMode ? ' active' : '')" 
+                        t-on-click="onStartQuoteMode" 
+                        title="Créer un devis">
+                    <i class="fa fa-file-text-o"/>
+                    <span class="o_quote_btn_text">Devis</span>
+                </button>
+                
+                <!-- Séparateur -->
+                <div class="o_toolbar_separator"/>
+                
+                <!-- Refresh -->
+                <button class="o_toolbar_btn o_refresh_btn" t-on-click="onRefresh" title="Actualiser l'arbre">
+                    <i class="fa fa-refresh"/>
+                </button>
+            </div>
+        </div>
+        
+        <!-- Barre de fusion (affichée quand des contacts sont sélectionnés) -->
+        <t t-if="familyTreeState.mergeMode and Object.keys(familyTreeState.selectedForMerge).length > 0">
+            <div class="o_merge_action_bar">
+                <span class="o_merge_count">
+                    <i class="fa fa-check-square-o"/>
+                    <t t-esc="Object.keys(familyTreeState.selectedForMerge).length"/> contact(s) sélectionné(s)
+                </span>
+                <div class="o_merge_actions">
+                    <button class="o_merge_cancel_btn" t-on-click="onCancelMerge">
+                        <i class="fa fa-times"/>
+                        Annuler
+                    </button>
+                    <button class="o_merge_confirm_btn" t-on-click="onMergePartners" 
+                            t-att-disabled="Object.keys(familyTreeState.selectedForMerge).length &lt; 2">
+                        <i class="fa fa-compress"/>
+                        Fusionner
+                    </button>
+                </div>
+            </div>
+        </t>
+        
+        <!-- Barre de création de devis (mode devis actif) -->
+        <t t-if="familyTreeState.quoteMode">
+            <div class="o_quote_action_bar">
+                <div class="o_quote_header">
+                    <i class="fa fa-file-text-o"/>
+                    <span>Création de devis</span>
+                    <span class="o_quote_step_indicator">
+                        <t t-esc="(familyTreeState.quoteCustomer ? 1 : 0) + (familyTreeState.quoteInvoice ? 1 : 0) + (familyTreeState.quoteDelivery ? 1 : 0)"/>/3 sélections
+                    </span>
+                </div>
+                
+                <div class="o_quote_selections">
+                    <!-- Client -->
+                    <div t-att-class="'o_quote_selection_item' + (familyTreeState.quoteStep === 0 and !familyTreeState.quoteCustomer ? ' active' : '') + (familyTreeState.quoteCustomer ? ' selected' : '')">
+                        <div class="o_quote_selection_label">
+                            <i class="fa fa-building"/>
+                            <span>Client</span>
+                        </div>
+                        <div class="o_quote_selection_value">
+                            <t t-if="familyTreeState.quoteCustomer">
+                                <span class="o_quote_selected_name" t-esc="familyTreeState.quoteCustomer.name"/>
+                                <button class="o_quote_clear_btn" t-on-click="() => this.onClearQuoteSelection('customer')">
+                                    <i class="fa fa-times"/>
+                                </button>
+                            </t>
+                            <t t-else="">
+                                <span class="o_quote_placeholder">Cliquez sur une carte...</span>
+                            </t>
+                        </div>
+                    </div>
+                    
+                    <!-- Facturation -->
+                    <div t-att-class="'o_quote_selection_item' + (familyTreeState.quoteStep === 1 and !familyTreeState.quoteInvoice ? ' active' : '') + (familyTreeState.quoteInvoice ? ' selected' : '')">
+                        <div class="o_quote_selection_label">
+                            <i class="fa fa-file-text"/>
+                            <span>Facturation</span>
+                        </div>
+                        <div class="o_quote_selection_value">
+                            <t t-if="familyTreeState.quoteInvoice">
+                                <span class="o_quote_selected_name" t-esc="familyTreeState.quoteInvoice.name"/>
+                                <button class="o_quote_clear_btn" t-on-click="() => this.onClearQuoteSelection('invoice')">
+                                    <i class="fa fa-times"/>
+                                </button>
+                            </t>
+                            <t t-else="">
+                                <span class="o_quote_placeholder">Cliquez sur une carte...</span>
+                            </t>
+                        </div>
+                    </div>
+                    
+                    <!-- Livraison -->
+                    <div t-att-class="'o_quote_selection_item' + (familyTreeState.quoteStep === 2 and !familyTreeState.quoteDelivery ? ' active' : '') + (familyTreeState.quoteDelivery ? ' selected' : '')">
+                        <div class="o_quote_selection_label">
+                            <i class="fa fa-truck"/>
+                            <span>Livraison</span>
+                        </div>
+                        <div class="o_quote_selection_value">
+                            <t t-if="familyTreeState.quoteDelivery">
+                                <span class="o_quote_selected_name" t-esc="familyTreeState.quoteDelivery.name"/>
+                                <button class="o_quote_clear_btn" t-on-click="() => this.onClearQuoteSelection('delivery')">
+                                    <i class="fa fa-times"/>
+                                </button>
+                            </t>
+                            <t t-else="">
+                                <span class="o_quote_placeholder">Cliquez sur une carte...</span>
+                            </t>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="o_quote_actions">
+                    <button class="o_quote_cancel_btn" t-on-click="onCancelQuoteMode">
+                        <i class="fa fa-times"/>
+                        Annuler
+                    </button>
+                    <button class="o_quote_confirm_btn" t-on-click="onConfirmQuote"
+                            t-att-disabled="!familyTreeState.quoteCustomer">
+                        <i class="fa fa-check"/>
+                        Créer le devis
+                    </button>
+                </div>
+            </div>
+        </t>
+    </t>
+
+    <!-- Renderer Template - Not used separately, integrated in controller -->
+    <t t-name="octavize_family_tree.FamilyTreeRenderer">
+        <div class="o_family_tree_renderer"/>
+    </t>
+
+    <!-- Recursive Tree Node Template -->
+    <t t-name="octavize_family_tree.TreeNode">
+        <div t-att-class="'o_tree_node' + (node.record.is_company ? ' is_company_node' : '')"
+             t-att-data-id="node.id"
+             t-att-data-depth="node.depth">
+            
+            <!-- Main wrapper: Card on left, Children (Contacts + Subsidiaries) on right -->
+            <div class="o_tree_node_row">
+                <!-- Card column -->
+                <div class="o_tree_node_column">
+                    <!-- Partner Card -->
+                    <div t-att-class="getCardClass(node) + (familyTreeState.selectedForMerge[node.id] ? ' merge-selected' : '')" 
+                         t-on-click="(ev) => this.onCardClick(ev, node)">
+                         
+                <!-- Checkbox de fusion (quand mode fusion actif) -->
+                <t t-if="familyTreeState.mergeMode">
+                    <div class="o_merge_checkbox" t-on-click.stop="() => this.onToggleMergeSelection(node.id)">
+                        <t t-if="familyTreeState.selectedForMerge[node.id]">
+                            <i class="fa fa-check-square"/>
+                        </t>
+                        <t t-else="">
+                            <i class="fa fa-square-o"/>
+                        </t>
+                    </div>
+                </t>
+                
+                <!-- Company/Subsidiary Badge -->
+                <t t-if="node.record.is_company">
+                    <t t-if="node.isSubsidiary">
+                        <span class="o_company_badge subsidiary">Filiale</span>
+                    </t>
+                    <t t-else="">
+                        <span class="o_company_badge">Société</span>
+                    </t>
+                </t>
+                <!-- Contact Type Badge (for non-companies) -->
+                <t t-elif="node.typeLabel">
+                    <span t-att-class="'o_type_badge type-' + (node.record.type || 'contact')" t-esc="node.typeLabel"/>
+                </t>
+                
+                <!-- Children Count Badge -->
+                <t t-if="node.childCount > 0">
+                    <span class="o_children_count" t-esc="node.childCount"/>
+                </t>
+                
+                <!-- Card Header with Avatar and Name -->
+                <div class="o_partner_card_header">
+                    <t t-if="archInfo.showAvatar">
+                        <t t-if="getImageUrl(node.record)">
+                            <img class="o_partner_avatar" t-att-src="getImageUrl(node.record)" t-att-alt="node.record.name"/>
+                        </t>
+                        <t t-else="">
+                            <div class="o_partner_avatar_placeholder">
+                                <t t-esc="getInitials(node.record.name)"/>
+                            </div>
+                        </t>
+                    </t>
+                    
+                    <div class="o_partner_info">
+                        <div class="o_partner_name">
+                            <t t-if="node.record.parent_id and !node.record.is_company">
+                                <t t-esc="node.record.name"/>
+                            </t>
+                            <t t-else="">
+                                <t t-esc="node.record.display_name"/>
+                            </t>
+                        </div>
+                        <t t-if="archInfo.showFunction and node.record.function">
+                            <div class="o_partner_function" t-esc="node.record.function"/>
+                        </t>
+                    </div>
+                </div>
+                
+                <!-- Card Body with Contact Info -->
+                <div class="o_partner_card_body">
+                    <t t-if="archInfo.showEmail and node.record.email">
+                        <div class="o_partner_email">
+                            <i class="fa fa-envelope"/>
+                            <span t-esc="node.record.email"/>
+                        </div>
+                    </t>
+                    <t t-if="archInfo.showPhone and node.record.phone">
+                        <div class="o_partner_phone">
+                            <i class="fa fa-phone"/>
+                            <span t-esc="node.record.phone"/>
+                        </div>
+                    </t>
+                    <!-- Show address for address types -->
+                    <t t-if="node.record.street and (node.record.type === 'delivery' or node.record.type === 'invoice' or node.record.type === 'other')">
+                        <div class="o_partner_address">
+                            <i class="fa fa-map-marker"/>
+                            <span>
+                                <t t-esc="node.record.street"/>
+                                <t t-if="node.record.city">, <t t-esc="node.record.city"/></t>
+                            </span>
+                        </div>
+                    </t>
+                </div>
+                
+                <!-- Expand/Collapse Toggle for SUBSIDIARIES (right) - blue arrow right -->
+                <t t-if="node.hasSubsidiaries">
+                    <div t-att-class="'o_expand_toggle o_expand_subsidiaries ' + (node.isSubsidiariesExpanded ? 'expanded' : 'collapsed')"
+                         t-on-click.stop="() => this.onToggleExpandSubsidiaries(node.id)"
+                         title="Filiales">
+                        <i class="fa fa-chevron-right"/>
+                        <span class="o_toggle_count" t-esc="node.subsidiaryCount"/>
+                    </div>
+                </t>
+                
+                <!-- Expand/Collapse Toggle for CONTACTS (right) - green arrow right -->
+                <t t-if="node.hasContacts">
+                    <div t-att-class="'o_expand_toggle o_expand_contacts ' + (node.isContactsExpanded ? 'expanded' : 'collapsed')"
+                         t-on-click.stop="() => this.onToggleExpandContacts(node.id)"
+                         title="Contacts">
+                        <i class="fa fa-chevron-right"/>
+                        <span class="o_toggle_count" t-esc="node.contactCount"/>
+                    </div>
+                </t>
+                
+                <!-- Drag Handle (only in reorganize mode) -->
+                <t t-if="familyTreeState.reorganizeMode">
+                    <div class="o_drag_handle" 
+                         t-on-mousedown="(ev) => this.onDragStart(ev, node)"
+                         title="Glisser pour déplacer">
+                        <i class="fa fa-arrows"/>
+                    </div>
+                </t>
+                
+                <!-- Change Parent Button (only when not in reorganize mode, for non-root nodes) -->
+                <t t-if="!familyTreeState.reorganizeMode and node.record.parent_id">
+                    <div class="o_change_parent_btn" 
+                         t-on-click.stop="(ev) => this.onChangeParent(ev, node)"
+                         title="Changer le parent">
+                        <i class="fa fa-user"/>
+                        <i class="fa fa-arrow-right o_arrow_icon"/>
+                    </div>
+                </t>
+                
+                <!-- Open Full Record Button (only when not in reorganize mode) -->
+                <t t-if="!familyTreeState.reorganizeMode">
+                    <div class="o_open_record_btn" 
+                         t-on-click.stop="(ev) => this.onOpenFullRecord(ev, node)"
+                         title="Ouvrir la fiche complète">
+                        <i class="fa fa-external-link"/>
+                    </div>
+                </t>
+                
+                <!-- Create Quote Button (visible on ALL cards) -->
+                <t t-if="!familyTreeState.reorganizeMode and !familyTreeState.quoteMode">
+                    <div class="o_create_quote_btn" 
+                         t-on-click.stop="(ev) => this.onCreateQuote(ev, node)"
+                         title="Créer un devis">
+                        <i class="fa fa-file-text-o"/>
+                    </div>
+                </t>
+                
+                <!-- Add Child Button (only when not in reorganize mode) -->
+                <t t-if="!familyTreeState.reorganizeMode">
+                <div class="o_add_child_btn" t-on-click.stop="(ev) => this.onAddChildClick(ev, node)">
+                    <i class="fa fa-plus"/>
+                </div>
+                </t>
+            </div>
+            <!-- End of Partner Card -->
+            
+                </div>
+                <!-- End of o_tree_node_column -->
+            
+                <!-- Children container to the RIGHT (Contacts + Subsidiaries) -->
+                <div class="o_tree_children_right_container">
+                    <!-- Contacts/Addresses to the RIGHT of the card (top position) -->
+                    <t t-if="node.contactChildren and node.contactChildren.length > 0">
+                        <div class="o_tree_contacts_right">
+                            <t t-foreach="node.contactChildren" t-as="contactNode" t-key="contactNode.id">
+                                <t t-call="octavize_family_tree.TreeNode">
+                                    <t t-set="node" t-value="contactNode"/>
+                                </t>
+                            </t>
+                        </div>
+                    </t>
+                    
+                    <!-- Subsidiaries to the RIGHT of the card (bottom position) -->
+                    <t t-if="node.subsidiaryChildren and node.subsidiaryChildren.length > 0">
+                        <div class="o_tree_subsidiaries_right">
+                            <t t-foreach="node.subsidiaryChildren" t-as="subNode" t-key="subNode.id">
+                                <t t-call="octavize_family_tree.TreeNode">
+                                    <t t-set="node" t-value="subNode"/>
+                                </t>
+                            </t>
+                        </div>
+                    </t>
+                </div>
+            </div>
+            <!-- End of o_tree_node_row -->
+        </div>
+    </t>
+
+</templates>
+

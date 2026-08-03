@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Vue formulaire du wizard de réassignation - UN SEUL CHAMP -->
+    <record id="view_change_parent_wizard_form" model="ir.ui.view">
+        <field name="name">partner.change.parent.wizard.form</field>
+        <field name="model">partner.change.parent.wizard</field>
+        <field name="arch" type="xml">
+            <form>
+                <field name="partner_id" invisible="1"/>
+                <field name="partner_name" invisible="1"/>
+                <field name="current_parent_id" invisible="1"/>
+                <group>
+                    <field name="new_parent_id" 
+                           string="Nouveau parent"
+                           placeholder="Rechercher un contact..."
+                           options="{'no_create': True, 'no_create_edit': True, 'no_quick_create': True}"/>
+                </group>
+                <footer>
+                    <button name="action_confirm" string="Confirmer" type="object" class="btn-primary"/>
+                    <button string="Annuler" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- Vue formulaire du wizard de création de contact -->
+    <record id="view_create_contact_wizard_form" model="ir.ui.view">
+        <field name="name">partner.create.contact.wizard.form</field>
+        <field name="model">partner.create.contact.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Nouveau contact">
+                <group>
+                    <field name="name" placeholder="Nom du contact ou de la société..."/>
+                    <field name="is_company" widget="boolean_toggle"/>
+                </group>
+                <group invisible="is_company">
+                    <field name="parent_id" 
+                           string="Société parente"
+                           placeholder="Rechercher une société..."
+                           domain="[('is_company', '=', True)]"
+                           options="{'no_create': True, 'no_create_edit': True, 'no_quick_create': True}"/>
+                    <field name="contact_type"/>
+                </group>
+                <footer>
+                    <button name="action_confirm" string="Créer" type="object" class="btn-primary"/>
+                    <button string="Annuler" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+</odoo>

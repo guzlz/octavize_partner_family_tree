@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Suppression de l'ancienne vue personnalisée si elle existe -->
+    <delete model="ir.ui.view" search="[('name', '=', 'res.partner.detail.dialog')]"/>
+
+    <!-- Family Tree View Definition for res.partner using kanban as base -->
+    <record id="view_partner_family_tree" model="ir.ui.view">
+        <field name="name">res.partner.family.tree</field>
+        <field name="model">res.partner</field>
+        <field name="priority">100</field>
+        <field name="arch" type="xml">
+            <kanban js_class="octavize_family_tree"
+                    class="o_family_tree_kanban"
+                    records_draggable="0"
+                    show_email="true" 
+                    show_phone="true" 
+                    show_function="true"
+                    show_avatar="true"
+                    max_depth="15">
+                <field name="id"/>
+                <field name="name"/>
+                <field name="display_name"/>
+                <field name="parent_id"/>
+                <field name="child_ids"/>
+                <field name="is_company"/>
+                <field name="email"/>
+                <field name="phone"/>
+                <field name="function"/>
+                <field name="image_128"/>
+                <field name="street"/>
+                <field name="city"/>
+                <field name="country_id"/>
+                <field name="type"/>
+                <templates>
+                    <t t-name="card">
+                        <!-- This template is replaced by JS, but needed for valid kanban arch -->
+                        <field name="display_name"/>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
+    <!-- Add Family Tree to the Contacts action -->
+    <record id="action_partner_family_tree" model="ir.actions.act_window">
+        <field name="name">Contacts Family Tree</field>
+        <field name="type">ir.actions.act_window</field>
+        <field name="res_model">res.partner</field>
+        <field name="view_mode">kanban,form</field>
+        <field name="domain">[('parent_id', '=', False)]</field>
+        <field name="context">{}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Créez un contact pour voir l'arbre généalogique !
+            </p>
+            <p>
+                L'arbre généalogique affiche la hiérarchie de vos contacts 
+                montrant les relations parent-enfant entre les sociétés et leurs contacts.
+            </p>
+        </field>
+    </record>
+
+    <!-- Action View Binding for Family Tree (use kanban with our custom js_class) -->
+    <record id="action_partner_family_tree_view_kanban" model="ir.actions.act_window.view">
+        <field name="sequence" eval="1"/>
+        <field name="view_mode">kanban</field>
+        <field name="view_id" ref="view_partner_family_tree"/>
+        <field name="act_window_id" ref="action_partner_family_tree"/>
+    </record>
+
+    <!-- Menu Item for Family Tree View -->
+    <menuitem 
+        id="menu_partner_family_tree"
+        name="Family Tree"
+        parent="contacts.menu_contacts"
+        action="action_partner_family_tree"
+        sequence="15"/>
+
+    <!-- ========== BOUTON ARBRE GÉNÉALOGIQUE SUR FICHE CONTACT ========== -->
+    
+    <!-- Action pour ouvrir l'arbre depuis une fiche contact -->
+    <record id="action_open_partner_family_tree" model="ir.actions.act_window">
+        <field name="name">Arbre généalogique</field>
+        <field name="type">ir.actions.act_window</field>
+        <field name="res_model">res.partner</field>
+        <field name="view_mode">kanban</field>
+        <field name="view_id" ref="view_partner_family_tree"/>
+        <field name="domain">[('parent_id', '=', False)]</field>
+    </record>
+    
+    <!-- Héritage du formulaire res.partner pour ajouter le bouton -->
+    <record id="view_partner_form_family_tree_button" model="ir.ui.view">
+        <field name="name">res.partner.form.family.tree.button</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="priority">99</field>
+        <field name="arch" type="xml">
+            <!-- Ajouter le bouton dans la zone des smart buttons -->
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_open_family_tree" 
+                        type="object" 
+                        class="oe_stat_button" 
+                        icon="fa-sitemap"
+                        string="Arbre"
+                        title="Voir l'arbre généalogique">
+                </button>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>
