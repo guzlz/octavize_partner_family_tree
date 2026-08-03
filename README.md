@@ -1,8 +1,39 @@
 # Octavize Partner Family Tree
 
 Module Odoo 19 (Community) autonome qui ajoute une vue "Arbre
-Généalogique" pour visualiser la hiérarchie des contacts (sociétés,
-filiales, adresses, personnes) sous forme de carte interactive.
+Généalogique" pour visualiser, organiser et fusionner la hiérarchie des
+contacts (sociétés, filiales, adresses, personnes) sous forme de carte
+interactive.
+
+## Pourquoi ce module
+
+La vue liste native de `res.partner` ne montre pas la structure
+société → filiale → contact → adresse de facturation/livraison : un
+commercial qui ne maîtrise pas l'arborescence des contacts Odoo crée
+souvent un nouveau contact plutôt que de rattacher le bon interlocuteur
+au bon parent. Résultat classique sur une base CRM qui vit depuis
+plusieurs mois : contacts en double, sociétés mal reliées à leurs
+filiales, fiches incomplètes — du bruit qui pollue le reporting
+commercial et complique la relance client.
+
+Ce module donne à l'équipe commerciale une interface visuelle simple
+pour :
+
+- **voir d'un coup d'œil** la hiérarchie complète d'un compte (société,
+  filiales, contacts, adresses) sans naviguer fiche par fiche ;
+- **créer un contact au bon endroit** dans la hiérarchie plutôt qu'en
+  doublon ;
+- **réorganiser** une structure de comptes existante (changement de
+  parent) sans passer par la vue technique ;
+- **fusionner les doublons** de contacts détectés, en conservant la
+  fiche principale et en archivant l'autre ;
+- **lancer un devis** directement depuis la fiche d'un contact de
+  l'arbre, avec les bonnes adresses de facturation/livraison.
+
+L'objectif est la lutte contre le bruit et les doublons dans la base de
+contacts CRM : une hygiène de données correcte en amont évite des
+erreurs de facturation, des relances manquées ou doublées, et un
+reporting commercial faussé par des comptes mal structurés.
 
 ## Aperçu
 
