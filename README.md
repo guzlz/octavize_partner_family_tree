@@ -31,8 +31,9 @@ pour :
   pour une société, "NOM Prénom" pour une personne) ;
 - **réorganiser** une structure de comptes existante (changement de
   parent) sans passer par la vue technique ;
-- **fusionner les doublons** de contacts détectés, en conservant la
-  fiche principale et en archivant l'autre ;
+- **fusionner les doublons** de contacts détectés : sélection dans
+  l'arbre, puis assistant natif Odoo qui reporte tout (ventes, factures,
+  messages...) sur la fiche conservée et supprime les autres ;
 - **lancer un devis** directement depuis la fiche d'un contact de
   l'arbre, avec les bonnes adresses de facturation/livraison.
 
