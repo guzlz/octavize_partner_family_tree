@@ -27,8 +27,6 @@
         - Configurable naming standard for contact records (company name order,
           "LAST NAME First name" for individuals), with a non-blocking inline hint
           and warnings on the partner form
-        - Non-blocking duplicate-product detection on quotations, purchase orders,
-          invoices and stock transfers
     """,
     'category': 'Sales/CRM',
     'author': 'Octavize',
@@ -40,9 +38,6 @@
         'contacts',
         'web',
         'sale',
-        'purchase',
-        'stock',
-        'account',
     ],
     'data': [
         'security/ir.model.access.csv',
@@ -50,7 +45,6 @@
         'wizard/change_parent_wizard_views.xml',
         'views/res_partner_views.xml',
         'views/naming_norm_views.xml',
-        'views/duplicate_product_views.xml',
     ],
     'assets': {
         'web.assets_backend': [

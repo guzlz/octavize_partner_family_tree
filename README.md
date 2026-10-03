@@ -33,9 +33,6 @@ pour :
   parent) sans passer par la vue technique ;
 - **fusionner les doublons** de contacts détectés, en conservant la
   fiche principale et en archivant l'autre ;
-- **repérer un produit saisi deux fois** sur un même devis, commande
-  d'achat, transfert de stock ou facture (ligne colorée, avertissement
-  non bloquant à la saisie) ;
 - **lancer un devis** directement depuis la fiche d'un contact de
   l'arbre, avec les bonnes adresses de facturation/livraison.
 
@@ -79,8 +76,11 @@ gère :
 - **Création de contact** directement depuis l'arbre
   (`partner.create.contact.wizard`), ouvrant ensuite la vue centrée sur
   le nouveau contact.
-- **Mode fusion** : sélection multiple de contacts, choix du contact
-  destination, ré-attachement des enfants et archivage des sources.
+- **Mode fusion** : sélection multiple de contacts dans l'arbre, puis
+  délégation à l'assistant natif d'Odoo (`base.action_partner_merge`),
+  pré-rempli avec la sélection — la fusion proprement dite (report des
+  ventes, factures, comptes bancaires, journalisation, refus des
+  fusions dangereuses) reste celle du cœur Odoo.
 - **Création de devis** depuis une carte de l'arbre, avec sélection des
   adresses de facturation/livraison (ouvre `sale.order` pré-rempli).
 
@@ -101,27 +101,22 @@ Ajoute par ailleurs à `res.partner` :
   sous le nom (`naming_norm_hint`) et avertissements en direct
   (`name_warnings`) sur les fiches société (ordre nom / forme
   juridique / ville) et personne (graphie "NOM Prénom").
-- **Détection de doublon produit** (mixin
-  `octavize.duplicate.product.mixin`) sur les lignes de devis, commande
-  d'achat, transfert de stock et facture : coloration de la ligne et
-  avertissement à la saisie quand le même produit apparaît deux fois
-  sur un même document. Non bloquant.
 
 ## Impact sur l'instance
 
-Le mode fusion (`performMerge()`) **ne transfère que la hiérarchie
-parent/enfant** (`res.partner.parent_id`) et archive les contacts
-sources — il ne migre pas les commandes, factures, opportunités CRM ou
-messages liés aux contacts fusionnés (contrairement à un outil de
-fusion complet). Voir Limites connues.
+Le mode fusion ne fait que sélectionner les contacts dans l'arbre et
+ouvrir l'assistant natif `base.action_partner_merge` : la fusion
+elle-même (report des ventes, factures, opportunités CRM, messages,
+comptes bancaires, journalisation) est entièrement gérée par le cœur
+Odoo, avec les mêmes garde-fous que partout ailleurs dans l'instance.
 
 ## Plateforme et prérequis d'installation
 
 - Odoo 19.0, module Community.
-- Dépend de `base`, `contacts`, `web`, `sale`, `purchase`, `stock`,
-  `account` (`sale` est requis pour la création de devis depuis
-  l'arbre ; `purchase`/`stock`/`account` pour la détection de doublon
-  produit sur les commandes d'achat, les transferts et les factures).
+- Dépend de `base`, `contacts`, `web`, `sale` (`sale` est requis pour
+  la création de devis depuis l'arbre ; sans lui, seule cette
+  fonctionnalité ne serait pas disponible, mais elle est déclarée en
+  dépendance dure).
 - Les wizards de l'arbre sont accessibles à tout utilisateur interne
   (`security/ir.model.access.csv` sans restriction de groupe) ; les
   droits effectifs suivent ceux déjà en place sur `res.partner`. La
@@ -142,22 +137,20 @@ s'exécute pas dans le navigateur de l'utilisateur consultant l'arbre.
 
 ## Limites connues
 
-- Le mode fusion ne transfère que `parent_id` des enfants directs et
-  archive la source — aucune redirection des ventes, factures,
-  activités, messages ou followers liés au contact archivé. À utiliser
-  pour du nettoyage de hiérarchie simple, pas comme outil de fusion
-  complet de fiches contact.
-- Aucune restriction de groupe sur les wizards de changement de parent,
-  création de contact ou fusion — tout utilisateur interne standard
-  peut les utiliser ; à restreindre par groupe si besoin en production.
+- Le mode fusion ne fait que présélectionner les contacts et ouvrir
+  l'assistant standard : ses propres limites s'appliquent (par exemple,
+  l'assistant natif ne fusionne pas des fiches de types très différents
+  sans confirmation explicite). Rien de spécifique à ce module ici.
+- Aucune restriction de groupe sur les wizards de changement de parent
+  ou de création de contact — tout utilisateur interne standard peut
+  les utiliser ; à restreindre par groupe si besoin en production.
 - `family_tree_controller.js` est un fichier volumineux (~2600 lignes)
   concentrant logique de rendu, dialogues et actions — pas de
   découpage en composants OWL séparés.
-- Les tests Python (`tests/`) couvrent la norme de nommage des contacts
-  et la détection de doublon produit ; le test de l'arbre lui-même
-  (`test_family_tree.py`) pilote un vrai navigateur et est taggé
-  `-standard` car Chrome headless ne démarre pas dans tous les
-  environnements de CI.
+- Les tests Python (`tests/`) couvrent la norme de nommage des contacts ;
+  le test de l'arbre lui-même (`test_family_tree.py`) pilote un vrai
+  navigateur et est taggé `-standard` car Chrome headless ne démarre pas
+  dans tous les environnements de CI.
 
 ## Tests
 
