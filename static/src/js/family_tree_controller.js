@@ -2,6 +2,7 @@
 
 import { KanbanController } from "@web/views/kanban/kanban_controller";
 import { useService } from "@web/core/utils/hooks";
+import { ConfirmationDialog } from "@web/core/confirmation_dialog/confirmation_dialog";
 import { useState, onWillStart, onMounted, onWillUnmount, onPatched, useRef } from "@odoo/owl";
 
 /**
@@ -24,6 +25,89 @@ function escapeHtml(value) {
 }
 
 /**
+ * Vocabulaire unique des étiquettes de rôle, strictement identique à celui du
+ * champ res.partner.partner_role (models/res_partner.py : PARTNER_ROLE_COLORS
+ * et _compute_partner_role). L'arbre généalogique charge ses enregistrements
+ * avec un jeu de champs restreint et ne dispose donc pas toujours de
+ * partner_role : on rejoue ici la même règle de calcul, à partir de
+ * is_company / parent_id / type, pour que l'arbre, ses pop-ups, son sélecteur
+ * de parent et sa légende affichent exactement les mêmes libellés que les
+ * fiches, listes et kanbans. Toute modification ici doit être répercutée côté
+ * Python, et inversement.
+ */
+export const PARTNER_ROLE_LABELS = {
+    societe_mere: "Société mère",
+    filiale: "Filiale",
+    societe_seule: "Société seule",
+    contact_reference: "Contact de référence",
+    invoice: "Adresse de facturation",
+    delivery: "Adresse de livraison",
+    private: "Adresse privée",
+    other: "Autre adresse",
+    particulier_seul: "Particulier seul",
+    auto_entrepreneur: "Auto-entrepreneur",
+};
+
+/** Icône et classe CSS associées à chaque rôle (arbre, sélecteur de parent). */
+export const PARTNER_ROLE_DISPLAY = {
+    societe_mere: { icon: "🏢", cssClass: "type-societe-mere" },
+    filiale: { icon: "🏭", cssClass: "type-filiale" },
+    societe_seule: { icon: "🏢", cssClass: "type-societe-seule" },
+    contact_reference: { icon: "👤", cssClass: "type-contact-reference" },
+    invoice: { icon: "📄", cssClass: "type-invoice" },
+    delivery: { icon: "🚚", cssClass: "type-delivery" },
+    private: { icon: "🏠", cssClass: "type-private" },
+    other: { icon: "📍", cssClass: "type-other" },
+    particulier_seul: { icon: "🙋", cssClass: "type-particulier-seul" },
+    auto_entrepreneur: { icon: "🧾", cssClass: "type-auto-entrepreneur" },
+};
+
+/**
+ * Rôle d'un partenaire, calculé comme _compute_partner_role côté Python.
+ *
+ * @param {Object} record enregistrement res.partner (is_company, parent_id,
+ *        type, et si connu hasSubsidiaries pour distinguer mère / seule)
+ * @param {Boolean} [hasSubsidiaries] vrai si la société possède au moins une
+ *        filiale ; à défaut la société est considérée comme société seule.
+ * @returns {String} clé de PARTNER_ROLE_LABELS
+ */
+export function getPartnerRole(record, hasSubsidiaries = false) {
+    // partner_role est la source de vérité : dès qu'il est chargé, on l'utilise
+    // tel quel. Le calcul de repli ci-dessous ne sert qu'aux rares lectures qui
+    // ne demandent pas le champ, et ne peut pas distinguer certains cas
+    // (société mère / société seule, auto-entrepreneur) faute des données.
+    if (record.partner_role && PARTNER_ROLE_LABELS[record.partner_role]) {
+        return record.partner_role;
+    }
+    if (record.is_company) {
+        if (record.parent_id) {
+            return "filiale";
+        }
+        return hasSubsidiaries ? "societe_mere" : "societe_seule";
+    }
+    if (record.type === "invoice") {
+        return "invoice";
+    }
+    if (record.type === "delivery") {
+        return "delivery";
+    }
+    if (record.type === "private") {
+        return "private";
+    }
+    if (!record.parent_id) {
+        return record.vat || record.company_registry
+            ? "auto_entrepreneur"
+            : "particulier_seul";
+    }
+    return record.type === "other" ? "other" : "contact_reference";
+}
+
+/** Libellé harmonisé du rôle d'un partenaire. */
+export function getPartnerRoleLabel(record, hasSubsidiaries = false) {
+    return PARTNER_ROLE_LABELS[getPartnerRole(record, hasSubsidiaries)];
+}
+
+/**
  * Family Tree Controller
  */
 export class FamilyTreeController extends KanbanController {
@@ -35,9 +119,11 @@ export class FamilyTreeController extends KanbanController {
         this.orm = useService("orm");
         this.actionService = useService("action");
         this.notification = useService("notification");
+        this.dialogService = useService("dialog");
         
-        this.treeSvgRef = useRef("treeSvg");
-        this.treeContainerRef = useRef("treeContainer");
+        // Une seule référence sur l'enveloppe commune : les panneaux, eux, sont
+        // produits par un t-foreach et se retrouvent par requête DOM.
+        this.treeWrapperRef = useRef("treeWrapper");
         
         // Get highlight partner from context
         this.highlightPartnerId = this.props.context?.highlight_partner_id || null;
@@ -45,6 +131,12 @@ export class FamilyTreeController extends KanbanController {
         this.familyTreeState = useState({
             zoomLevel: 100,
             selectedRootId: null,
+            // Plusieurs généalogies peuvent être ouvertes côte à côte : on
+            // réaffilie d'un groupe à l'autre sans ouvrir deux écrans.
+            // selectedRootId reste la racine « courante » (la première ouverte),
+            // utilisée par la recherche et le mode devis.
+            openRootIds: [],
+            treeDataList: [],
             selectedNodeId: null, // Pour la sélection de carte
             rootOptions: [],
             treeData: null,
@@ -109,9 +201,11 @@ export class FamilyTreeController extends KanbanController {
         });
         
         onMounted(() => {
-            if (this.familyTreeState.selectedRootId) {
-                this.familyTreeState.expandedSubsidiaries[this.familyTreeState.selectedRootId] = true;
-                this.familyTreeState.expandedContacts[this.familyTreeState.selectedRootId] = true;
+            for (const rootId of this.familyTreeState.openRootIds) {
+                this.familyTreeState.expandedSubsidiaries[rootId] = true;
+                this.familyTreeState.expandedContacts[rootId] = true;
+            }
+            if (this.familyTreeState.openRootIds.length) {
                 this.updateTreeData();
             }
             document.addEventListener('click', this._onDocumentClick);
@@ -135,11 +229,26 @@ export class FamilyTreeController extends KanbanController {
      * Draw curved SVG branches between nodes
      */
     drawBranches() {
-        const svg = this.treeSvgRef.el;
-        const container = this.treeContainerRef.el;
-        if (!svg || !container) return;
-        
+        const wrapper = this.treeWrapperRef.el;
+        if (!wrapper) return;
+        // Chaque généalogie ouverte a son propre SVG : les courbes d'un groupe ne
+        // doivent jamais traverser le panneau du voisin.
+        wrapper.querySelectorAll('.o_family_tree_pane').forEach(pane => {
+            const svg = pane.querySelector('.o_tree_svg_container > svg');
+            const container = pane.querySelector('.o_family_tree_container');
+            if (svg && container) {
+                this._drawPaneBranches(svg, container);
+            }
+        });
+    }
+
+    _drawPaneBranches(svg, container) {
         svg.innerHTML = '';
+        // getBoundingClientRect renvoie des pixels écran, donc déjà mis à
+        // l'échelle par le zoom de l'enveloppe. Le SVG, lui, est à l'intérieur
+        // de cette enveloppe et travaille en coordonnées non zoomées : il faut
+        // donc diviser les écarts mesurés par l'échelle.
+        const scale = (this.familyTreeState.zoomLevel || 100) / 100;
         
         // Only process nodes that have visible children containers
         const nodes = container.querySelectorAll('.o_tree_node[data-id]');
@@ -166,8 +275,8 @@ export class FamilyTreeController extends KanbanController {
                 
                 if (subsidiaryNodes.length > 0) {
                     // Start from BLUE BUTTON position (70% height on right side)
-                    const parentX = parentRect.right - containerRect.left;
-                    const parentY = parentRect.top + (parentRect.height * 0.7) - containerRect.top;
+                    const parentX = (parentRect.right - containerRect.left) / scale;
+                    const parentY = (parentRect.top + (parentRect.height * 0.7) - containerRect.top) / scale;
                     
                     subsidiaryNodes.forEach(childNode => {
                         const childCard = childNode.querySelector(':scope > .o_tree_node_row > .o_tree_node_column > .o_partner_card');
@@ -177,8 +286,8 @@ export class FamilyTreeController extends KanbanController {
                         // Skip if card is not visible
                         if (childRect.width === 0 || childRect.height === 0) return;
                         
-                        const childX = childRect.left - containerRect.left;
-                        const childY = childRect.top + childRect.height / 2 - containerRect.top;
+                        const childX = (childRect.left - containerRect.left) / scale;
+                        const childY = (childRect.top + childRect.height / 2 - containerRect.top) / scale;
                         
                         const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
                         const midX = (parentX + childX) / 2;
@@ -202,8 +311,8 @@ export class FamilyTreeController extends KanbanController {
                 const contactNodes = contactsContainer.querySelectorAll(':scope > .o_tree_node');
                 
                 if (contactNodes.length > 0) {
-                    const parentX = parentRect.right - containerRect.left;
-                    const parentY = parentRect.top + parentRect.height / 2 - containerRect.top;
+                    const parentX = (parentRect.right - containerRect.left) / scale;
+                    const parentY = (parentRect.top + parentRect.height / 2 - containerRect.top) / scale;
                     
                     contactNodes.forEach(childNode => {
                         const childCard = childNode.querySelector(':scope > .o_tree_node_row > .o_tree_node_column > .o_partner_card');
@@ -213,8 +322,8 @@ export class FamilyTreeController extends KanbanController {
                         // Skip if card is not visible
                         if (childRect.width === 0 || childRect.height === 0) return;
                         
-                        const childX = childRect.left - containerRect.left;
-                        const childY = childRect.top + childRect.height / 2 - containerRect.top;
+                        const childX = (childRect.left - containerRect.left) / scale;
+                        const childY = (childRect.top + childRect.height / 2 - containerRect.top) / scale;
                         
                         const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
                         const midX = (parentX + childX) / 2;
@@ -263,17 +372,8 @@ export class FamilyTreeController extends KanbanController {
         };
     }
 
-    getContactTypeLabel(record) {
-        if (record.is_company) {
-            return record.parent_id ? 'Filiale' : '';
-        }
-        const typeLabels = {
-            'contact': 'Contact',
-            'invoice': 'Facturation',
-            'delivery': 'Livraison',
-            'other': 'Autre',
-        };
-        return typeLabels[record.type] || record.type || 'Contact';
+    getContactTypeLabel(record, hasSubsidiaries = false) {
+        return getPartnerRoleLabel(record, hasSubsidiaries);
     }
 
     /**
@@ -286,7 +386,8 @@ export class FamilyTreeController extends KanbanController {
             const fieldsToFetch = [
                 'id', 'name', 'display_name', 'parent_id', 'child_ids',
                 'is_company', 'email', 'phone', 'function', 'image_128',
-                'street', 'city', 'country_id', 'type', 'commercial_partner_id'
+                'street', 'city', 'country_id', 'type', 'commercial_partner_id',
+            'partner_role'
             ];
             
             // Check for affiliate_ids
@@ -360,7 +461,7 @@ export class FamilyTreeController extends KanbanController {
             }
             
             if (selectedRoot) {
-                this.familyTreeState.selectedRootId = selectedRoot.id;
+                this._pfSetRoots([selectedRoot.id]);
                 this.familyTreeState.expandedSubsidiaries[selectedRoot.id] = true;
                 this.familyTreeState.expandedContacts[selectedRoot.id] = true;
                 
@@ -478,19 +579,51 @@ export class FamilyTreeController extends KanbanController {
         return this.highlightedIds.has(nodeId);
     }
 
+    /**
+     * Définir les généalogies ouvertes.
+     *
+     * Toutes les entrées du code qui « changent de racine » passent par ici, de
+     * sorte que openRootIds et selectedRootId ne puissent pas diverger.
+     *
+     * @param {Array<Number>} ids racines à ouvrir
+     * @param {Boolean} [append] ajouter aux généalogies déjà ouvertes au lieu de
+     *        les remplacer
+     */
+    _pfSetRoots(ids, append = false) {
+        const state = this.familyTreeState;
+        const next = append ? [...state.openRootIds] : [];
+        for (const id of ids) {
+            const rootId = parseInt(id, 10);
+            if (rootId && !next.includes(rootId)) {
+                next.push(rootId);
+            }
+        }
+        state.openRootIds = next;
+        state.selectedRootId = next.length ? next[0] : null;
+    }
+
     updateTreeData() {
-        if (!this.familyTreeState.selectedRootId || !this.recordsById) {
-            this.familyTreeState.treeData = null;
+        const state = this.familyTreeState;
+        if (!this.recordsById) {
+            state.treeDataList = [];
+            state.treeData = null;
             return;
         }
-        
-        const rootRecord = this.recordsById[this.familyTreeState.selectedRootId];
-        if (!rootRecord) {
-            this.familyTreeState.treeData = null;
-            return;
+
+        const panes = [];
+        for (const rootId of state.openRootIds) {
+            const rootRecord = this.recordsById[rootId];
+            if (!rootRecord) continue;
+            panes.push({
+                rootId: rootId,
+                rootName: rootRecord.display_name || rootRecord.name || '',
+                node: this._buildTreeNode(rootRecord, 0),
+            });
         }
-        
-        this.familyTreeState.treeData = this._buildTreeNode(rootRecord, 0);
+        state.treeDataList = panes;
+        // Conservé pour tout ce qui raisonne encore sur une seule généalogie
+        // (écrans d'accueil, mode devis, dessin initial).
+        state.treeData = panes.length ? panes[0].node : null;
     }
 
     _buildTreeNode(record, depth) {
@@ -529,6 +662,13 @@ export class FamilyTreeController extends KanbanController {
         
         const hasSubsidiaries = subsidiaryChildren.length > 0;
         const hasContacts = contactChildren.length > 0;
+        // Pour l'étiquette de rôle uniquement : on regarde les enfants sociétés
+        // réellement rattachés, sans dépendre de la profondeur maximale
+        // d'affichage (au-delà, "children" est vide et une société mère serait
+        // étiquetée "Société seule").
+        const hasSubsidiaryChildren = hasSubsidiaries || (record.child_ids || []).some(
+            (childId) => this.recordsById[childId]?.is_company
+        );
         const hasChildren = children.length > 0;
         
         const isSubsidiariesExpanded = !!this.familyTreeState.expandedSubsidiaries[record.id];
@@ -549,7 +689,9 @@ export class FamilyTreeController extends KanbanController {
             contactCount: contactChildren.length,
             childCount: children.length,
             depth: depth,
-            typeLabel: this.getContactTypeLabel(record),
+            typeLabel: this.getContactTypeLabel(record, hasSubsidiaryChildren),
+            roleKey: getPartnerRole(record, hasSubsidiaryChildren),
+            roleClass: PARTNER_ROLE_DISPLAY[getPartnerRole(record, hasSubsidiaryChildren)].cssClass,
             isSubsidiary: record.is_company && !!record.parent_id,
             isHighlighted: this.isHighlighted(record.id),
         };
@@ -583,7 +725,8 @@ export class FamilyTreeController extends KanbanController {
             [['id', '=', record.id]],
             ['id', 'name', 'display_name', 'is_company', 'parent_id', 'email', 'phone', 'mobile', 
              'street', 'street2', 'city', 'zip', 'country_id', 'function', 'title', 'comment',
-             'vat', 'website', 'type', 'image_128', 'child_ids', 'category_id', 'ref', 'lang'],
+             'vat', 'website', 'type', 'image_128', 'child_ids', 'category_id', 'ref', 'lang',
+             'partner_role'],
             { limit: 1 }
         );
         
@@ -599,13 +742,10 @@ export class FamilyTreeController extends KanbanController {
         }
         if (data.country_id) address += (address ? ', ' : '') + data.country_id[1];
         
-        const typeLabels = {
-            'contact': 'Contact',
-            'invoice': 'Adresse de facturation',
-            'delivery': 'Adresse de livraison',
-            'private': 'Adresse privée',
-            'other': 'Autre adresse'
-        };
+        // partner_role est lu directement : c'est la source de vérité calculée
+        // côté Python (child_ids mélange filiales et adresses, il ne permet pas
+        // de distinguer une société mère d'une société seule).
+        const roleLabel = PARTNER_ROLE_LABELS[data.partner_role] || getPartnerRoleLabel(data);
         
         const dialogHtml = `
             <div class="partner-detail-dialog">
@@ -620,7 +760,7 @@ export class FamilyTreeController extends KanbanController {
                         <h2>${escapeHtml(data.display_name)}</h2>
                         ${data.function ? `<div class="partner-function">${escapeHtml(data.function)}</div>` : ''}
                         ${data.parent_id ? `<div class="partner-company">${escapeHtml(data.parent_id[1])}</div>` : ''}
-                        <span class="partner-type-badge ${data.is_company ? 'company' : 'contact'}">${data.is_company ? 'Société' : (typeLabels[data.type] || 'Contact')}</span>
+                        <span class="partner-type-badge ${data.is_company ? 'company' : 'contact'}">${escapeHtml(roleLabel)}</span>
                     </div>
                 </div>
 
@@ -883,11 +1023,11 @@ export class FamilyTreeController extends KanbanController {
         if (recordType === 'invoice') {
             // Adresse de facturation → mettre directement dans facturation
             this.familyTreeState.quoteInvoice = selection;
-            this.notification.add("Facturation sélectionnée - Sélectionnez le client", { type: "info" });
+            this.notification.add("Adresse de facturation sélectionnée - Sélectionnez le client", { type: "info" });
         } else if (recordType === 'delivery') {
             // Adresse de livraison → mettre directement dans livraison
             this.familyTreeState.quoteDelivery = selection;
-            this.notification.add("Livraison sélectionnée - Sélectionnez le client", { type: "info" });
+            this.notification.add("Adresse de livraison sélectionnée - Sélectionnez le client", { type: "info" });
         } else {
             // Société ou Contact → mettre dans client
             this.familyTreeState.quoteCustomer = selection;
@@ -979,12 +1119,12 @@ export class FamilyTreeController extends KanbanController {
             // Sélection facturation
             this.familyTreeState.quoteInvoice = selection;
             this._updateQuoteStep();
-            this.notification.add("Facturation sélectionnée", { type: "success" });
+            this.notification.add("Adresse de facturation sélectionnée", { type: "success" });
             this.notification.add(this._getQuoteStepMessage(), { type: "info" });
         } else if (step === 2) {
             // Sélection livraison
             this.familyTreeState.quoteDelivery = selection;
-            this.notification.add("Livraison sélectionnée - Cliquez sur 'Créer le devis' pour confirmer", { type: "success" });
+            this.notification.add("Adresse de livraison sélectionnée - Cliquez sur 'Créer le devis' pour confirmer", { type: "success" });
         }
     }
     
@@ -1168,7 +1308,7 @@ export class FamilyTreeController extends KanbanController {
         const allPartners = await this.orm.searchRead(
             'res.partner',
             [['id', '!=', node.record.id]],
-            ['id', 'display_name', 'name', 'is_company', 'type', 'parent_id'],
+            ['id', 'display_name', 'name', 'is_company', 'type', 'parent_id', 'partner_role'],
             { order: 'is_company desc, name asc', limit: 1000 }
         );
         
@@ -1177,17 +1317,15 @@ export class FamilyTreeController extends KanbanController {
         allPartners.forEach(p => partnersById[p.id] = p);
         
         // Fonction pour obtenir l'icône et le label du type
-        const getTypeInfo = (partner) => {
-            if (partner.is_company && partner.parent_id) return { icon: '🏭', label: 'Filiale', cssClass: 'type-filiale' };
-            if (partner.is_company) return { icon: '🏢', label: 'Société', cssClass: 'type-societe' };
-            switch (partner.type) {
-                case 'invoice': return { icon: '📄', label: 'Facturation', cssClass: 'type-facturation' };
-                case 'delivery': return { icon: '🚚', label: 'Livraison', cssClass: 'type-livraison' };
-                case 'private': return { icon: '🏠', label: 'Privée', cssClass: 'type-privee' };
-                case 'other': return { icon: '📍', label: 'Autre', cssClass: 'type-autre' };
-                case 'contact': 
-                default: return { icon: '👤', label: 'Contact', cssClass: 'type-contact' };
+        const hasSubsidiariesById = {};
+        allPartners.forEach(p => {
+            if (p.is_company && p.parent_id) {
+                hasSubsidiariesById[p.parent_id[0]] = true;
             }
+        });
+        const getTypeInfo = (partner) => {
+            const role = getPartnerRole(partner, !!hasSubsidiariesById[partner.id]);
+            return { ...PARTNER_ROLE_DISPLAY[role], label: PARTNER_ROLE_LABELS[role] };
         };
         
         // Construire l'arbre hiérarchique
@@ -1285,11 +1423,12 @@ export class FamilyTreeController extends KanbanController {
                 </div>
                 
                 <div class="legend">
-                    <span>🏢 Société</span>
+                    <span>🏢 Société mère / seule</span>
                     <span>🏭 Filiale</span>
-                    <span>👤 Contact</span>
-                    <span>📄 Facturation</span>
-                    <span>🚚 Livraison</span>
+                    <span>👤 Contact de référence</span>
+                    <span>🙋 Particulier seul</span>
+                    <span>📄 Adresse de facturation</span>
+                    <span>🚚 Adresse de livraison</span>
                 </div>
             </div>
             
@@ -1512,15 +1651,15 @@ export class FamilyTreeController extends KanbanController {
      * Recalculate the expand level based on current expanded state
      */
     recalculateExpandLevel() {
-        const rootId = this.familyTreeState.selectedRootId;
-        if (!rootId) {
+        const rootIds = this.familyTreeState.openRootIds;
+        if (!rootIds.length) {
             this.familyTreeState.expandLevel = 0;
             return;
         }
         
-        // BFS to find max expanded depth
+        // BFS to find max expanded depth, sur toutes les généalogies ouvertes
         let maxDepth = 0;
-        let queue = [{ id: rootId, depth: 0 }];
+        let queue = rootIds.map(id => ({ id: id, depth: 0 }));
         
         while (queue.length > 0) {
             const { id, depth } = queue.shift();
@@ -1558,7 +1697,7 @@ export class FamilyTreeController extends KanbanController {
 
     async onRootChange(ev) {
         const rootId = parseInt(ev.target.value, 10);
-        this.familyTreeState.selectedRootId = rootId;
+        this._pfSetRoots([rootId]);
         this.familyTreeState.expandedSubsidiaries = {};
         this.familyTreeState.expandedContacts = {};
         this.familyTreeState.expandedSubsidiaries[rootId] = true;
@@ -1569,7 +1708,8 @@ export class FamilyTreeController extends KanbanController {
         const fieldsToFetch = [
             'id', 'name', 'display_name', 'parent_id', 'child_ids',
             'is_company', 'email', 'phone', 'function', 'image_128',
-            'street', 'city', 'country_id', 'type', 'commercial_partner_id'
+            'street', 'city', 'country_id', 'type', 'commercial_partner_id',
+            'partner_role'
         ];
         if (this.hasAffiliateField) fieldsToFetch.push('affiliate_ids');
         
@@ -1608,14 +1748,14 @@ export class FamilyTreeController extends KanbanController {
             return;
         }
         
-        const rootId = this.familyTreeState.selectedRootId;
-        if (!rootId || !this.recordsById[rootId]) {
+        const rootIds = this.familyTreeState.openRootIds.filter(id => this.recordsById[id]);
+        if (!rootIds.length) {
             this.updateTreeData();
             return;
         }
         
-        // BFS to expand nodes level by level
-        let currentLevel = [rootId];
+        // BFS to expand nodes level by level, sur toutes les généalogies ouvertes
+        let currentLevel = [...rootIds];
         let currentDepth = 0;
         
         while (currentLevel.length > 0 && currentDepth < this.familyTreeState.expandLevel) {
@@ -1671,9 +1811,9 @@ export class FamilyTreeController extends KanbanController {
         this.familyTreeState.expandLevel = 1;
         this.familyTreeState.expandedSubsidiaries = {};
         this.familyTreeState.expandedContacts = {};
-        if (this.familyTreeState.selectedRootId) {
-            this.familyTreeState.expandedSubsidiaries[this.familyTreeState.selectedRootId] = true;
-            this.familyTreeState.expandedContacts[this.familyTreeState.selectedRootId] = true;
+        for (const rootId of this.familyTreeState.openRootIds) {
+            this.familyTreeState.expandedSubsidiaries[rootId] = true;
+            this.familyTreeState.expandedContacts[rootId] = true;
         }
         this.updateTreeData();
     }
@@ -1730,133 +1870,40 @@ export class FamilyTreeController extends KanbanController {
     }
     
     /**
-     * Open merge dialog
+     * Fusionner les contacts sélectionnés via l'assistant natif d'Odoo.
+     *
+     * La fusion maison qui existait ici ne faisait que rattacher les enfants au
+     * contact conservé puis archiver les sources : devis, commandes, factures,
+     * messages, pièces jointes et abonnements restaient accrochés aux fiches
+     * archivées. L'assistant standard (base.action_partner_merge) reporte tout
+     * cela, gère les comptes bancaires, journalise l'opération et refuse les
+     * fusions dangereuses — autant de cas qu'il n'y a aucune raison de
+     * réimplémenter.
      */
     async onMergePartners() {
         const selectedIds = Object.keys(this.familyTreeState.selectedForMerge).map(id => parseInt(id));
-        
+
         if (selectedIds.length < 2) {
             this.notification.add("Sélectionnez au moins 2 contacts à fusionner", { type: "warning" });
             return;
         }
-        
-        // Charger les infos des contacts sélectionnés
-        const partners = await this.orm.searchRead(
-            'res.partner',
-            [['id', 'in', selectedIds]],
-            ['id', 'display_name', 'is_company', 'email', 'phone', 'type', 'parent_id']
-        );
-        
-        // Dialog pour choisir le contact principal (destination)
-        const confirmed = await new Promise((resolve) => {
-            const dialog = document.createElement('div');
-            dialog.className = 'modal fade show';
-            dialog.style.cssText = 'display: block; background: rgba(0,0,0,0.5); position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 10000;';
-            dialog.innerHTML = `
-                <div class="modal-dialog" style="margin: 80px auto; max-width: 550px;">
-                    <div class="modal-content" style="border-radius: 12px; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
-                        <div class="modal-header" style="border-bottom: 1px solid #e2e8f0; padding: 16px 20px; background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);">
-                            <h5 class="modal-title" style="font-weight: 600; font-size: 18px;">
-                                <span style="margin-right: 8px;">🔀</span> Fusionner ${partners.length} contacts
-                            </h5>
-                            <button type="button" class="btn-close" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #94a3b8;">&times;</button>
-                        </div>
-                        <div class="modal-body" style="padding: 20px;">
-                            <p style="margin-bottom: 15px; color: #64748b;">
-                                Choisissez le contact <strong>principal</strong> qui conservera toutes les données. 
-                                Les autres contacts seront fusionnés dans celui-ci.
-                            </p>
-                            <div style="margin-bottom: 15px;">
-                                <label style="display: block; margin-bottom: 8px; font-weight: 600;">Contact destination :</label>
-                                <select id="mergeDestinationSelect" style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px;">
-                                    ${partners.map(p => `<option value="${p.id}">${escapeHtml(p.display_name)}${p.is_company ? ' (Société)' : ''} ${p.email ? '- ' + escapeHtml(p.email) : ''}</option>`).join('')}
-                                </select>
-                            </div>
-                            <div style="background: #fef3c7; border-radius: 8px; padding: 12px; margin-top: 15px;">
-                                <p style="margin: 0; font-size: 13px; color: #92400e;">
-                                    <strong>⚠️ Attention :</strong> Cette action est irréversible. 
-                                    Les contacts sources seront archivés et leurs données transférées au contact destination.
-                                </p>
-                            </div>
-                        </div>
-                        <div class="modal-footer" style="border-top: 1px solid #e2e8f0; padding: 12px 20px; display: flex; gap: 10px; justify-content: flex-end;">
-                            <button type="button" class="btn btn-secondary" style="padding: 8px 20px; border-radius: 8px; border: 1px solid #e2e8f0; background: white; cursor: pointer;">Annuler</button>
-                            <button type="button" class="btn btn-warning" style="padding: 8px 20px; border-radius: 8px; border: none; background: #f59e0b; color: white; cursor: pointer; font-weight: 600;">Fusionner</button>
-                        </div>
-                    </div>
-                </div>
-            `;
-            
-            document.body.appendChild(dialog);
-            
-            const closeBtn = dialog.querySelector('.btn-close');
-            const cancelBtn = dialog.querySelector('.btn-secondary');
-            const mergeBtn = dialog.querySelector('.btn-warning');
-            const select = dialog.querySelector('#mergeDestinationSelect');
-            
-            const close = (result) => {
-                document.body.removeChild(dialog);
-                resolve(result ? parseInt(select.value) : null);
-            };
-            
-            closeBtn.onclick = () => close(false);
-            cancelBtn.onclick = () => close(false);
-            mergeBtn.onclick = () => close(true);
-            dialog.onclick = (e) => { if (e.target === dialog) close(false); };
-        });
-        
-        if (confirmed !== null) {
-            const destinationId = confirmed;
-            const sourceIds = selectedIds.filter(id => id !== destinationId);
-            
-            try {
-                // Utiliser l'action de fusion Odoo native si disponible
-                // Sinon, faire une fusion manuelle
-                await this.performMerge(destinationId, sourceIds);
-                
-                // Réinitialiser le mode fusion
+
+        // L'assistant lit active_ids pour se pré-remplir : il arrive avec les
+        // contacts cochés dans l'arbre et propose le contact à conserver.
+        await this.actionService.doAction('base.action_partner_merge', {
+            additionalContext: {
+                active_model: 'res.partner',
+                active_ids: selectedIds,
+                active_id: selectedIds[0],
+            },
+            onClose: async () => {
                 this.familyTreeState.mergeMode = false;
                 this.familyTreeState.selectedForMerge = {};
-                
-                // Rafraîchir
                 await this.onRefresh();
-                
-                this.notification.add(`${sourceIds.length} contact(s) fusionné(s) avec succès`, { type: "success" });
-            } catch (error) {
-                console.error("Merge error:", error);
-                this.notification.add(`Erreur lors de la fusion: ${error.message || 'Erreur inconnue'}`, { type: "danger" });
-            }
-        }
+            },
+        });
     }
-    
-    /**
-     * Perform the actual merge
-     */
-    async performMerge(destinationId, sourceIds) {
-        // Pour chaque contact source, transférer les enfants au contact destination
-        // puis archiver le contact source
-        for (const sourceId of sourceIds) {
-            // Transférer les enfants
-            const children = await this.orm.searchRead(
-                'res.partner',
-                [['parent_id', '=', sourceId]],
-                ['id']
-            );
-            
-            if (children.length > 0) {
-                const childIds = children.map(c => c.id);
-                await this.orm.write('res.partner', childIds, {
-                    parent_id: destinationId,
-                });
-            }
-            
-            // Archiver le contact source
-            await this.orm.write('res.partner', [sourceId], {
-                active: false,
-            });
-        }
-    }
-    
+
     /**
      * Cancel merge mode
      */
@@ -1868,7 +1915,7 @@ export class FamilyTreeController extends KanbanController {
     // ===================== FIN MODE FUSION =====================
 
     async onRefresh() {
-        const previousRoot = this.familyTreeState.selectedRootId;
+        const previousRoots = [...this.familyTreeState.openRootIds];
         const previousPartnerName = this.familyTreeState.selectedPartnerName;
         const previousExpandLevel = this.familyTreeState.expandLevel;
         
@@ -1887,34 +1934,39 @@ export class FamilyTreeController extends KanbanController {
         const fieldsToFetch = [
             'id', 'name', 'display_name', 'parent_id', 'child_ids',
             'is_company', 'email', 'phone', 'function', 'image_128',
-            'street', 'city', 'country_id', 'type', 'commercial_partner_id'
+            'street', 'city', 'country_id', 'type', 'commercial_partner_id',
+            'partner_role'
         ];
         if (this.hasAffiliateField) fieldsToFetch.push('affiliate_ids');
         
-        // Reload the current root and its children
-        if (previousRoot) {
-            // Reload root
-            const roots = await this.orm.searchRead(
-                'res.partner',
-                [['id', '=', previousRoot]],
-                fieldsToFetch,
-                { limit: 1 }
-            );
-            
-            if (roots.length > 0) {
-                this.recordsById[previousRoot] = roots[0];
-                await this.loadChildrenForRoot(previousRoot, fieldsToFetch);
-                
-                // Restore expansions ET le niveau
-                this.familyTreeState.expandedSubsidiaries = savedExpSubsidiaries;
-                this.familyTreeState.expandedContacts = savedExpContacts;
-                this.familyTreeState.expandLevel = previousExpandLevel;
-                this.familyTreeState.selectedRootId = previousRoot;
-                this.familyTreeState.selectedPartnerName = previousPartnerName;
-                
-                this.updateTreeData();
-            }
+        // Recharger TOUTES les généalogies ouvertes, pas seulement la première :
+        // une actualisation ne doit pas faire disparaître les autres panneaux.
+        if (!previousRoots.length) return;
+
+        const roots = await this.orm.searchRead(
+            'res.partner',
+            [['id', 'in', previousRoots]],
+            fieldsToFetch,
+        );
+        if (!roots.length) return;
+
+        const rechargees = [];
+        for (const root of roots) {
+            this.recordsById[root.id] = root;
+            await this.loadChildrenForRoot(root.id, fieldsToFetch);
+            rechargees.push(root.id);
         }
+
+        // Conserver l'ordre d'ouverture : searchRead ne le garantit pas.
+        this._pfSetRoots(previousRoots.filter(id => rechargees.includes(id)));
+
+        // Restore expansions ET le niveau
+        this.familyTreeState.expandedSubsidiaries = savedExpSubsidiaries;
+        this.familyTreeState.expandedContacts = savedExpContacts;
+        this.familyTreeState.expandLevel = previousExpandLevel;
+        this.familyTreeState.selectedPartnerName = previousPartnerName;
+
+        this.updateTreeData();
     }
 
     hasMultipleRoots() {
@@ -1937,8 +1989,61 @@ export class FamilyTreeController extends KanbanController {
         return null;
     }
 
+    /**
+     * Transformation de l'enveloppe : déplacement ET zoom.
+     *
+     * Le zoom était appliqué sur chaque conteneur d'arbre. Une mise à l'échelle
+     * CSS ne change pas l'encombrement réel de l'élément : avec deux généalogies
+     * côte à côte, la seconde restait positionnée d'après la largeur NON zoomée
+     * de la première, laissant un vide énorme dès qu'on dézoomait. En portant le
+     * zoom sur l'enveloppe commune, tout le plan se met à l'échelle d'un bloc et
+     * les positions relatives sont conservées.
+     */
+    getWrapperStyle() {
+        const state = this.familyTreeState;
+        const scale = state.zoomLevel / 100;
+        return `transform: translate(${state.panX}px, ${state.panY}px) scale(${scale})`;
+    }
+
+    /**
+     * Dézoomer et recadrer pour que TOUTES les généalogies ouvertes tiennent
+     * à l'écran.
+     *
+     * Sans ça, ouvrir une seconde généalogie ne se voyait pas : elle était
+     * placée à droite de la première, hors du champ visible, et on croyait
+     * que rien ne s'était passé.
+     */
+    _pfFitToScreen() {
+        const wrapper = this.treeWrapperRef.el;
+        const viewport = wrapper?.parentElement;
+        if (!wrapper || !viewport) return;
+
+        // scrollWidth / scrollHeight donnent l'encombrement NON zoomé : la mise
+        // à l'échelle CSS ne change pas la géométrie de mise en page.
+        const contenuL = wrapper.scrollWidth;
+        const contenuH = wrapper.scrollHeight;
+        const vueL = viewport.clientWidth;
+        const vueH = viewport.clientHeight;
+        if (!contenuL || !contenuH || !vueL || !vueH) return;
+
+        const niveaux = [150, 125, 100, 75, 50];
+        const marge = 40;
+        const niveau = niveaux.find(
+            (z) => contenuL * (z / 100) <= vueL - marge && contenuH * (z / 100) <= vueH - marge
+        ) || 50;
+
+        this.familyTreeState.zoomLevel = niveau;
+        const echelle = niveau / 100;
+        this.familyTreeState.panX = Math.max(0, (vueL - contenuL * echelle) / 2);
+        this.familyTreeState.panY = Math.max(0, (vueH - contenuH * echelle) / 2);
+
+        // Les courbes sont tracées à partir de positions mesurées : il faut les
+        // refaire une fois le nouveau zoom appliqué.
+        setTimeout(() => this.drawBranches(), 60);
+    }
+
     getContainerClass() {
-        let classes = `o_family_tree_container zoom-${this.familyTreeState.zoomLevel}`;
+        let classes = 'o_family_tree_container';
         if (this.familyTreeState.reorganizeMode) {
             classes += ' reorganize-mode';
         }
@@ -1953,10 +2058,10 @@ export class FamilyTreeController extends KanbanController {
         if (!this.familyTreeState.reorganizeMode) {
             // Reset positions when exiting reorganize mode
             this.nodePositions = {};
-            // Remove transform styles
-            const container = this.treeContainerRef.el;
-            if (container) {
-                container.querySelectorAll('.o_tree_node').forEach(el => {
+            // Remove transform styles, sur toutes les généalogies ouvertes
+            const wrapper = this.treeWrapperRef.el;
+            if (wrapper) {
+                wrapper.querySelectorAll('.o_tree_node').forEach(el => {
                     el.style.transform = '';
                     el.style.zIndex = '';
                 });
@@ -1967,6 +2072,31 @@ export class FamilyTreeController extends KanbanController {
     /**
      * Start dragging a card (visual reorganization only)
      */
+    /**
+     * Identifiants d'une fiche et de toute sa descendance.
+     *
+     * Sert à interdire le dépôt d'une fiche sur elle-même ou sur l'un de ses
+     * propres descendants : on créerait un cycle, et Odoo refuserait l'écriture
+     * avec un message bien plus obscur que de simplement griser la cible.
+     */
+    _pfSubtreeIds(rootId) {
+        const ids = new Set();
+        const file = [rootId];
+        while (file.length) {
+            const id = file.shift();
+            if (ids.has(id)) continue;
+            ids.add(id);
+            const record = this.recordsById[id];
+            if (!record) continue;
+            for (const enfants of [record.child_ids, record.affiliate_ids]) {
+                (enfants || []).forEach((childId) => {
+                    if (!ids.has(childId)) file.push(childId);
+                });
+            }
+        }
+        return ids;
+    }
+
     onDragStart(ev, node) {
         if (!this.familyTreeState.reorganizeMode) return;
         
@@ -1976,20 +2106,92 @@ export class FamilyTreeController extends KanbanController {
         const nodeEl = ev.target.closest('.o_tree_node');
         if (!nodeEl) return;
         
-        const rect = nodeEl.getBoundingClientRect();
-        
+        const record = this.recordsById[node.id];
         this.dragState = {
             isDragging: true,
             nodeId: node.id,
             nodeEl: nodeEl,
             startX: ev.clientX,
             startY: ev.clientY,
-            offsetX: this.nodePositions[node.id]?.x || 0,
-            offsetY: this.nodePositions[node.id]?.y || 0,
+            // Le dépôt remplace le positionnement libre : la fiche repart
+            // toujours de sa place, elle ne la conserve jamais.
+            offsetX: 0,
+            offsetY: 0,
+            interdits: this._pfSubtreeIds(node.id),
+            parentActuel: record?.parent_id ? record.parent_id[0] : null,
+            cibleId: null,
+            cibleValide: false,
         };
         
         nodeEl.classList.add('dragging');
         nodeEl.style.zIndex = '1000';
+        // Sans ça, elementFromPoint ne verrait que la fiche déplacée.
+        nodeEl.style.pointerEvents = 'none';
+    }
+
+    /**
+     * Mettre en évidence la fiche survolée pendant un glisser.
+     */
+    _pfUpdateDropTarget(ev) {
+        const drag = this.dragState;
+        const sousCurseur = document.elementFromPoint(ev.clientX, ev.clientY);
+        const carte = sousCurseur && sousCurseur.closest
+            ? sousCurseur.closest('.o_partner_card')
+            : null;
+        const noeud = carte ? carte.closest('.o_tree_node[data-id]') : null;
+        const cibleId = noeud ? parseInt(noeud.dataset.id, 10) : null;
+
+        if (cibleId === drag.cibleId) return;
+
+        const wrapper = this.treeWrapperRef.el;
+        if (wrapper) {
+            wrapper.querySelectorAll('.o_drop_target_valid, .o_drop_target_invalid')
+                .forEach((el) => el.classList.remove('o_drop_target_valid', 'o_drop_target_invalid'));
+        }
+
+        drag.cibleId = cibleId;
+        drag.cibleValide = !!cibleId
+            && !drag.interdits.has(cibleId)
+            && cibleId !== drag.parentActuel;
+
+        if (carte && cibleId) {
+            carte.classList.add(drag.cibleValide ? 'o_drop_target_valid' : 'o_drop_target_invalid');
+        }
+    }
+
+    /**
+     * Rattacher la fiche glissée à la fiche sur laquelle elle a été déposée.
+     */
+    _pfAskReattach(nodeId, cibleId) {
+        const deplacee = this.recordsById[nodeId];
+        const cible = this.recordsById[cibleId];
+        if (!deplacee || !cible) return;
+
+        const nomDeplacee = deplacee.display_name || deplacee.name;
+        const nomCible = cible.display_name || cible.name;
+
+        this.dialogService.add(ConfirmationDialog, {
+            title: "Rattacher ce contact",
+            body: `Rattacher « ${nomDeplacee} » à « ${nomCible} » ?`,
+            confirmLabel: "Rattacher",
+            cancelLabel: "Annuler",
+            confirm: async () => {
+                try {
+                    await this.orm.write('res.partner', [nodeId], { parent_id: cibleId });
+                    await this.onRefresh();
+                    this.notification.add(
+                        `« ${nomDeplacee} » est maintenant rattaché à « ${nomCible} ».`,
+                        { type: "success" }
+                    );
+                } catch (error) {
+                    this.notification.add(
+                        `Rattachement impossible : ${error.message || error}`,
+                        { type: "danger" }
+                    );
+                }
+            },
+            cancel: () => {},
+        });
     }
 
     /**
@@ -2001,16 +2203,12 @@ export class FamilyTreeController extends KanbanController {
             const dx = ev.clientX - this.dragState.startX;
             const dy = ev.clientY - this.dragState.startY;
             
-            const newX = this.dragState.offsetX + dx;
-            const newY = this.dragState.offsetY + dy;
-            
-            // Apply transform
+            // La fiche suit le curseur le temps du glisser, uniquement pour
+            // montrer ce qu'on déplace : la position n'est jamais conservée.
             if (this.dragState.nodeEl) {
-                this.dragState.nodeEl.style.transform = `translate(${newX}px, ${newY}px)`;
+                this.dragState.nodeEl.style.transform = `translate(${dx}px, ${dy}px)`;
             }
-            
-            // Store position
-            this.nodePositions[this.dragState.nodeId] = { x: newX, y: newY };
+            this._pfUpdateDropTarget(ev);
             return;
         }
         
@@ -2033,11 +2231,22 @@ export class FamilyTreeController extends KanbanController {
     _onMouseUp(ev) {
         // Stop node dragging
         if (this.dragState.isDragging) {
-            if (this.dragState.nodeEl) {
-                this.dragState.nodeEl.classList.remove('dragging');
-                this.dragState.nodeEl.style.zIndex = '';
+            const { nodeId, nodeEl, cibleId, cibleValide } = this.dragState;
+
+            // La fiche revient toujours à sa place : seule l'arborescence
+            // réelle décide de sa position, jamais le geste.
+            if (nodeEl) {
+                nodeEl.classList.remove('dragging');
+                nodeEl.style.zIndex = '';
+                nodeEl.style.pointerEvents = '';
+                nodeEl.style.transform = '';
             }
-            
+            const wrapper = this.treeWrapperRef.el;
+            if (wrapper) {
+                wrapper.querySelectorAll('.o_drop_target_valid, .o_drop_target_invalid')
+                    .forEach((el) => el.classList.remove('o_drop_target_valid', 'o_drop_target_invalid'));
+            }
+
             this.dragState = {
                 isDragging: false,
                 nodeId: null,
@@ -2047,7 +2256,11 @@ export class FamilyTreeController extends KanbanController {
                 offsetX: 0,
                 offsetY: 0,
             };
-            
+
+            if (cibleValide && cibleId) {
+                this._pfAskReattach(nodeId, cibleId);
+            }
+
             // Redraw branches
             setTimeout(() => this.drawBranches(), 10);
             return;
@@ -2152,7 +2365,7 @@ export class FamilyTreeController extends KanbanController {
             const allPartners = await this.orm.searchRead(
                 'res.partner',
                 [],
-                ['id', 'display_name', 'name', 'is_company', 'type', 'parent_id', 'email', 'phone', 'city'],
+                ['id', 'display_name', 'name', 'is_company', 'type', 'parent_id', 'email', 'phone', 'city', 'partner_role'],
                 { order: 'is_company desc, name asc', limit: 5000 }
             );
             
@@ -2255,8 +2468,9 @@ export class FamilyTreeController extends KanbanController {
         this.familyTreeState.searchQuery = '';
         this.familyTreeState.searchResults = [];
         this.familyTreeState.selectedPartnerName = '';
-        this.familyTreeState.selectedRootId = null;
+        this._pfSetRoots([]);
         this.familyTreeState.treeData = null;
+        this.familyTreeState.treeDataList = [];
         this.highlightPartnerId = null;
         this.highlightedIds.clear();
     }
@@ -2278,11 +2492,38 @@ export class FamilyTreeController extends KanbanController {
             await this.onSelectSearchResult(result);
         }
     }
+
+    /**
+     * Ouvrir une généalogie **à côté** de celles déjà affichées, au lieu de les
+     * remplacer : c'est ce qui permet de réaffilier d'un groupe à l'autre sans
+     * ouvrir deux écrans.
+     */
+    async onAddSearchResult(ev) {
+        const resultId = parseInt(ev.currentTarget.dataset.resultId, 10);
+        const result = this.familyTreeState.searchResults.find(r => r.id === resultId);
+        if (result) {
+            await this.onSelectSearchResult(result, true);
+        }
+    }
+
+    /**
+     * Fermer une généalogie. La dernière encore ouverte ne peut pas être fermée :
+     * on retomberait sur un écran vide sans moyen évident de revenir.
+     */
+    onCloseRoot(ev) {
+        const rootId = parseInt(ev.currentTarget.dataset.rootId, 10);
+        const state = this.familyTreeState;
+        if (state.openRootIds.length <= 1) return;
+        this._pfSetRoots(state.openRootIds.filter(id => id !== rootId));
+        this.updateTreeData();
+        this.recalculateExpandLevel();
+        setTimeout(() => this._pfFitToScreen(), 150);
+    }
     
     /**
      * Select a search result and navigate to it
      */
-    async onSelectSearchResult(result) {
+    async onSelectSearchResult(result, append = false) {
         // Save the selected partner name and keep it in search query for editing
         this.familyTreeState.selectedPartnerName = result.display_name;
         this.familyTreeState.searchQuery = result.display_name; // Garder le nom pour pouvoir le modifier
@@ -2319,13 +2560,18 @@ export class FamilyTreeController extends KanbanController {
         const fieldsToFetch = [
             'id', 'name', 'display_name', 'parent_id', 'child_ids',
             'is_company', 'email', 'phone', 'function', 'image_128',
-            'street', 'city', 'country_id', 'type', 'commercial_partner_id'
+            'street', 'city', 'country_id', 'type', 'commercial_partner_id',
+            'partner_role'
         ];
         if (this.hasAffiliateField) fieldsToFetch.push('affiliate_ids');
         
-        // TOUJOURS recharger la racine et ses enfants pour avoir les données à jour
-        // Vider le cache pour cette racine
-        this.recordsById = {};
+        // TOUJOURS recharger la racine et ses enfants pour avoir les données à jour.
+        // En mode ajout en revanche, le cache doit survivre : les généalogies déjà
+        // ouvertes y puisent leurs enregistrements, et le vider ferait disparaître
+        // leurs panneaux — on ne rechargerait que la branche ajoutée.
+        if (!append) {
+            this.recordsById = {};
+        }
         
         // Charger la racine avec toutes ses données
         const rootRecords = await this.orm.searchRead(
@@ -2339,12 +2585,16 @@ export class FamilyTreeController extends KanbanController {
             this.recordsById[rootId] = rootRecords[0];
         }
         
-        // Set the new root
-        this.familyTreeState.selectedRootId = rootId;
+        // Set the new root — en mode ajout, les généalogies déjà ouvertes restent.
+        this._pfSetRoots([rootId], append);
         
-        // Reset expansions
-        this.familyTreeState.expandedSubsidiaries = {};
-        this.familyTreeState.expandedContacts = {};
+        // Reset expansions. En mode ajout on conserve celles des autres
+        // généalogies : les replier parce qu'on en ouvre une nouvelle serait
+        // exactement ce qu'on cherche à éviter.
+        if (!append) {
+            this.familyTreeState.expandedSubsidiaries = {};
+            this.familyTreeState.expandedContacts = {};
+        }
         this.familyTreeState.expandedSubsidiaries[rootId] = true;
         this.familyTreeState.expandedContacts[rootId] = true;
         
@@ -2360,9 +2610,14 @@ export class FamilyTreeController extends KanbanController {
         this.updateTreeData();
         this.recalculateExpandLevel();
         
-        // Pan to center on the partner (after DOM update)
+        // Après un ajout, on recadre sur l'ensemble : montrer uniquement la
+        // nouvelle généalogie donnerait l'impression que l'autre a disparu.
         setTimeout(() => {
-            this.scrollToPartner(result.id);
+            if (append) {
+                this._pfFitToScreen();
+            } else {
+                this.scrollToPartner(result.id);
+            }
         }, 200);
     }
     
@@ -2391,10 +2646,15 @@ export class FamilyTreeController extends KanbanController {
      * Scroll to center on a specific partner
      */
     scrollToPartner(partnerId) {
-        const card = this.treeContainerRef.el?.querySelector(`[data-id="${partnerId}"] .o_partner_card`);
-        if (card) {
+        // La fiche peut se trouver dans n'importe laquelle des généalogies
+        // ouvertes : on cherche dans l'enveloppe commune, et on se repère sur le
+        // conteneur du panneau qui la contient.
+        const wrapper = this.treeWrapperRef.el;
+        const card = wrapper?.querySelector(`[data-id="${partnerId}"] .o_partner_card`);
+        const container = card?.closest('.o_family_tree_container');
+        if (card && container) {
             const rect = card.getBoundingClientRect();
-            const containerRect = this.treeContainerRef.el.getBoundingClientRect();
+            const containerRect = container.getBoundingClientRect();
             
             // Calculate offset to center the card
             const offsetX = rect.left - containerRect.left - (window.innerWidth / 2) + (rect.width / 2);

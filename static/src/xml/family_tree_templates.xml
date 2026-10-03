@@ -55,21 +55,52 @@
                             </div>
                         </t>
                         <t t-else="">
+                            <!-- Une généalogie par panneau : plusieurs peuvent être
+                                 ouvertes côte à côte pour réaffilier d'un groupe à
+                                 l'autre sans ouvrir deux écrans. Le zoom et le
+                                 déplacement s'appliquent à l'enveloppe commune, donc
+                                 à toutes les généalogies à la fois. -->
                             <div class="o_family_tree_wrapper" 
+                                 t-ref="treeWrapper"
                                  t-on-mousedown="onPanStart"
                                  t-on-wheel="onWheel"
                                  t-att-class="panState.isPanning ? 'panning' : ''"
-                                 t-att-style="'transform: translate(' + familyTreeState.panX + 'px, ' + familyTreeState.panY + 'px)'">
-                                <!-- SVG Layer for curved branches -->
-                                <div class="o_tree_svg_container">
-                                    <svg id="treeSvg" t-ref="treeSvg"/>
-                                </div>
-                                <!-- Tree nodes -->
-                                <div t-att-class="getContainerClass()" t-ref="treeContainer">
-                                    <t t-call="octavize_family_tree.TreeNode">
-                                        <t t-set="node" t-value="familyTreeState.treeData"/>
-                                    </t>
-                                </div>
+                                 t-att-style="getWrapperStyle()">
+                                <t t-foreach="familyTreeState.treeDataList" t-as="pane" t-key="pane.rootId">
+                                    <section class="o_family_tree_pane">
+                                        <!-- En-tête seulement quand il y a de quoi
+                                             distinguer : une généalogie seule n'a pas
+                                             besoin d'être étiquetée. -->
+                                        <t t-if="familyTreeState.treeDataList.length > 1">
+                                            <header class="o_family_tree_pane_header">
+                                                <i class="fa fa-sitemap"/>
+                                                <span class="o_pane_title" t-esc="pane.rootName"/>
+                                                <button class="o_pane_close"
+                                                        t-att-data-root-id="pane.rootId"
+                                                        t-on-click.stop="onCloseRoot"
+                                                        title="Fermer cette généalogie">
+                                                    <i class="fa fa-times"/>
+                                                </button>
+                                            </header>
+                                        </t>
+                                        <!-- Le corps porte le repère du SVG : les
+                                             courbes sont calculées par rapport au
+                                             conteneur des cartes, l'en-tête ne doit
+                                             donc pas entrer dans le repère. -->
+                                        <div class="o_family_tree_pane_body">
+                                            <!-- SVG Layer for curved branches -->
+                                            <div class="o_tree_svg_container">
+                                                <svg/>
+                                            </div>
+                                            <!-- Tree nodes -->
+                                            <div t-att-class="getContainerClass()">
+                                                <t t-call="octavize_family_tree.TreeNode">
+                                                    <t t-set="node" t-value="pane.node"/>
+                                                </t>
+                                            </div>
+                                        </div>
+                                    </section>
+                                </t>
                             </div>
                             
                             <!-- MENU GLOBAL - HORS du wrapper transformé -->
@@ -80,14 +111,14 @@
                                     <t t-if="familyTreeState.activeMenuNode.record.type === 'invoice' or familyTreeState.activeMenuNode.record.type === 'delivery'">
                                         <div class="o_add_menu_item type-contact" t-on-click.stop="() => this.onCreateChild(familyTreeState.activeMenuNode, 'contact')">
                                             <i class="fa fa-user"/>
-                                            <span>Contact</span>
+                                            <span>Contact de référence</span>
                                         </div>
                                     </t>
                                     <!-- For companies, show all options -->
                                     <t t-elif="familyTreeState.activeMenuNode.record.is_company">
                                         <div class="o_add_menu_item type-contact" t-on-click.stop="() => this.onCreateChild(familyTreeState.activeMenuNode, 'contact')">
                                             <i class="fa fa-user"/>
-                                            <span>Contact</span>
+                                            <span>Contact de référence</span>
                                         </div>
                                         <div class="o_add_menu_item type-invoice" t-on-click.stop="() => this.onCreateChild(familyTreeState.activeMenuNode, 'invoice')">
                                             <i class="fa fa-file-text"/>
@@ -96,17 +127,21 @@
                                         <div class="o_add_menu_item type-delivery" t-on-click.stop="() => this.onCreateChild(familyTreeState.activeMenuNode, 'delivery')">
                                             <i class="fa fa-truck"/>
                                             <span>Adresse de livraison</span>
+                                        </div>
+                                        <div class="o_add_menu_item type-other" t-on-click.stop="() => this.onCreateChild(familyTreeState.activeMenuNode, 'other')">
+                                            <i class="fa fa-map-marker"/>
+                                            <span>Autre adresse</span>
                                         </div>
                                         <div class="o_add_menu_item type-subsidiary" t-on-click.stop="() => this.onCreateChild(familyTreeState.activeMenuNode, 'subsidiary')">
                                             <i class="fa fa-building"/>
                                             <span>Filiale</span>
                                         </div>
                                     </t>
-                                    <!-- For regular contacts, allow Contact + Invoice + Delivery -->
+                                    <!-- For regular contacts, allow Contact + Invoice + Delivery + Other -->
                                     <t t-else="">
                                         <div class="o_add_menu_item type-contact" t-on-click.stop="() => this.onCreateChild(familyTreeState.activeMenuNode, 'contact')">
                                             <i class="fa fa-user"/>
-                                            <span>Contact</span>
+                                            <span>Contact de référence</span>
                                         </div>
                                         <div class="o_add_menu_item type-invoice" t-on-click.stop="() => this.onCreateChild(familyTreeState.activeMenuNode, 'invoice')">
                                             <i class="fa fa-file-text"/>
@@ -115,6 +150,10 @@
                                         <div class="o_add_menu_item type-delivery" t-on-click.stop="() => this.onCreateChild(familyTreeState.activeMenuNode, 'delivery')">
                                             <i class="fa fa-truck"/>
                                             <span>Adresse de livraison</span>
+                                        </div>
+                                        <div class="o_add_menu_item type-other" t-on-click.stop="() => this.onCreateChild(familyTreeState.activeMenuNode, 'other')">
+                                            <i class="fa fa-map-marker"/>
+                                            <span>Autre adresse</span>
                                         </div>
                                     </t>
                                 </div>
@@ -177,6 +216,15 @@
                                         </span>
                                     </t>
                                 </div>
+                                <!-- Ouvrir cette généalogie À CÔTÉ des autres, au lieu
+                                     de les remplacer. -->
+                                <button class="o_result_add"
+                                        t-att-data-result-id="result.id"
+                                        t-on-click.stop="onAddSearchResult"
+                                        title="Ouvrir à côté des généalogies déjà affichées">
+                                    <i class="fa fa-columns"/>
+                                    <span>à côté</span>
+                                </button>
                             </div>
                         </t>
                     </div>
@@ -216,6 +264,19 @@
                 <!-- Séparateur large -->
                 <div class="o_toolbar_separator o_separator_large"/>
                 
+                <!-- Mode Rattacher : on glisse une fiche sur une AUTRE FICHE pour la
+                     rattacher à celle-ci, y compris d'une généalogie vers l'autre. Les
+                     cibles valides s'encadrent en vert, les interdites (la fiche
+                     elle-même, ses propres descendants, son parent actuel) se grisent.
+                     Un dépôt dans le vide ramène la fiche à sa place sans rien
+                     modifier, et toute écriture passe par une confirmation. -->
+                <button t-att-class="'o_toolbar_btn o_reorganize_btn' + (familyTreeState.reorganizeMode ? ' active' : '')"
+                        t-on-click="toggleReorganizeMode"
+                        title="Glisser une fiche sur une autre pour la rattacher">
+                    <i class="fa fa-arrows"/>
+                    <span class="o_reorganize_btn_text">Rattacher</span>
+                </button>
+
                 <!-- Mode Fusion - Bouton distinct et visible -->
                 <button t-att-class="'o_toolbar_btn o_merge_btn' + (familyTreeState.mergeMode ? ' active' : '')" 
                         t-on-click="onToggleMergeMode" 
@@ -379,18 +440,14 @@
                     </div>
                 </t>
                 
-                <!-- Company/Subsidiary Badge -->
+                <!-- Étiquette de rôle : vocabulaire unique partagé avec les fiches,
+                     listes et kanbans (family_tree_controller.js,
+                     PARTNER_ROLE_LABELS / PARTNER_ROLE_DISPLAY). -->
                 <t t-if="node.record.is_company">
-                    <t t-if="node.isSubsidiary">
-                        <span class="o_company_badge subsidiary">Filiale</span>
-                    </t>
-                    <t t-else="">
-                        <span class="o_company_badge">Société</span>
-                    </t>
+                    <span t-att-class="'o_company_badge ' + node.roleClass" t-esc="node.typeLabel"/>
                 </t>
-                <!-- Contact Type Badge (for non-companies) -->
                 <t t-elif="node.typeLabel">
-                    <span t-att-class="'o_type_badge type-' + (node.record.type || 'contact')" t-esc="node.typeLabel"/>
+                    <span t-att-class="'o_type_badge ' + node.roleClass" t-esc="node.typeLabel"/>
                 </t>
                 
                 <!-- Children Count Badge -->
@@ -472,11 +529,11 @@
                     </div>
                 </t>
                 
-                <!-- Drag Handle (only in reorganize mode) -->
+                <!-- Poignée de glisser (mode Rattacher uniquement) -->
                 <t t-if="familyTreeState.reorganizeMode">
                     <div class="o_drag_handle" 
                          t-on-mousedown="(ev) => this.onDragStart(ev, node)"
-                         title="Glisser pour déplacer">
+                         title="Glisser cette fiche sur une autre pour l'y rattacher">
                         <i class="fa fa-arrows"/>
                     </div>
                 </t>

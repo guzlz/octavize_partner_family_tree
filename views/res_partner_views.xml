@@ -13,8 +13,8 @@
             <kanban js_class="octavize_family_tree"
                     class="o_family_tree_kanban"
                     records_draggable="0"
-                    show_email="true" 
-                    show_phone="true" 
+                    show_email="true"
+                    show_phone="true"
                     show_function="true"
                     show_avatar="true"
                     max_depth="15">
@@ -32,6 +32,7 @@
                 <field name="city"/>
                 <field name="country_id"/>
                 <field name="type"/>
+                <field name="partner_role"/>
                 <templates>
                     <t t-name="card">
                         <!-- This template is replaced by JS, but needed for valid kanban arch -->
@@ -55,7 +56,7 @@
                 Créez un contact pour voir l'arbre généalogique !
             </p>
             <p>
-                L'arbre généalogique affiche la hiérarchie de vos contacts 
+                L'arbre généalogique affiche la hiérarchie de vos contacts
                 montrant les relations parent-enfant entre les sociétés et leurs contacts.
             </p>
         </field>
@@ -70,42 +71,270 @@
     </record>
 
     <!-- Menu Item for Family Tree View -->
-    <menuitem 
+    <menuitem
         id="menu_partner_family_tree"
         name="Family Tree"
         parent="contacts.menu_contacts"
         action="action_partner_family_tree"
         sequence="15"/>
 
-    <!-- ========== BOUTON ARBRE GÉNÉALOGIQUE SUR FICHE CONTACT ========== -->
-    
-    <!-- Action pour ouvrir l'arbre depuis une fiche contact -->
-    <record id="action_open_partner_family_tree" model="ir.actions.act_window">
-        <field name="name">Arbre généalogique</field>
-        <field name="type">ir.actions.act_window</field>
-        <field name="res_model">res.partner</field>
-        <field name="view_mode">kanban</field>
-        <field name="view_id" ref="view_partner_family_tree"/>
-        <field name="domain">[('parent_id', '=', False)]</field>
+    <!-- ========== BADGE DE RÔLE DANS LES VUES LISTE / KANBAN GLOBALES ========== -->
+
+    <record id="view_partner_tree_role_badge" model="ir.ui.view">
+        <field name="name">res.partner.list.role.badge</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_tree"/>
+        <field name="arch" type="xml">
+            <field name="display_name" position="after">
+                <field name="partner_role" widget="badge" optional="show"
+                       options="{'color_field': 'partner_role_color'}"/>
+                <field name="partner_role_color" column_invisible="True"/>
+            </field>
+        </field>
     </record>
-    
-    <!-- Héritage du formulaire res.partner pour ajouter le bouton -->
+
+    <record id="view_partner_kanban_role_badge" model="ir.ui.view">
+        <field name="name">res.partner.kanban.role.badge</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.res_partner_kanban_view"/>
+        <field name="arch" type="xml">
+            <field name="is_company" position="after">
+                <field name="partner_role"/>
+            </field>
+            <field name="display_name" position="after">
+                <!-- Texte en dur (pas de <field> imbriqué : le widget de champ
+                     ajoute son propre conteneur "bloc" qui étire le badge sur
+                     toute la largeur de la carte). Un <span> simple reste
+                     inline : le badge se place à droite du nom et ne repasse
+                     à la ligne que si la carte est trop étroite. -->
+                <span t-if="record.partner_role.raw_value == 'societe_mere'" class="badge rounded-pill o_partner_card_role_badge o_badge_color_2">Société mère</span>
+                <span t-elif="record.partner_role.raw_value == 'filiale'" class="badge rounded-pill o_partner_card_role_badge o_badge_color_1">Filiale</span>
+                <span t-elif="record.partner_role.raw_value == 'societe_seule'" class="badge rounded-pill o_partner_card_role_badge o_badge_color_7">Société seule</span>
+                <span t-elif="record.partner_role.raw_value == 'contact_reference'" class="badge rounded-pill o_partner_card_role_badge o_badge_color_6">Contact de référence</span>
+                <span t-elif="record.partner_role.raw_value == 'invoice'" class="badge rounded-pill o_partner_card_role_badge o_badge_color_3">Adresse de facturation</span>
+                <span t-elif="record.partner_role.raw_value == 'delivery'" class="badge rounded-pill o_partner_card_role_badge o_badge_color_4">Adresse de livraison</span>
+                <span t-elif="record.partner_role.raw_value == 'private'" class="badge rounded-pill o_partner_card_role_badge o_badge_color_9">Adresse privée</span>
+                <span t-elif="record.partner_role.raw_value == 'other'" class="badge rounded-pill o_partner_card_role_badge o_badge_color_5">Autre adresse</span>
+                <span t-elif="record.partner_role.raw_value == 'particulier_seul'" class="badge rounded-pill o_partner_card_role_badge o_badge_color_8">Particulier seul</span>
+                <span t-elif="record.partner_role.raw_value == 'auto_entrepreneur'" class="badge rounded-pill o_partner_card_role_badge o_badge_color_10">Auto-entrepreneur</span>
+            </field>
+        </field>
+    </record>
+
+    <!-- ========== BOUTON ARBRE GÉNÉALOGIQUE + BADGE DE RÔLE + ONGLET FILIALES ========== -->
+
+    <!-- Héritage du formulaire res.partner -->
     <record id="view_partner_form_family_tree_button" model="ir.ui.view">
         <field name="name">res.partner.form.family.tree.button</field>
         <field name="model">res.partner</field>
         <field name="inherit_id" ref="base.view_partner_form"/>
         <field name="priority">99</field>
         <field name="arch" type="xml">
-            <!-- Ajouter le bouton dans la zone des smart buttons -->
+
+            <!-- Bouton "Arbre" et compteur "Filiales" dans les smart buttons -->
             <xpath expr="//div[@name='button_box']" position="inside">
-                <button name="action_open_family_tree" 
-                        type="object" 
-                        class="oe_stat_button" 
+                <button name="action_open_family_tree"
+                        type="object"
+                        class="oe_stat_button"
                         icon="fa-sitemap"
                         string="Arbre"
                         title="Voir l'arbre généalogique">
                 </button>
+                <button name="action_view_filiales"
+                        type="object"
+                        class="oe_stat_button"
+                        icon="fa-building"
+                        invisible="not is_company or not filiale_count">
+                    <field name="filiale_count" widget="statinfo" string="Filiales"/>
+                </button>
             </xpath>
+
+            <!-- Badge de rôle (Société mère / Filiale / Société seule / Contact de
+                 référence / Adresse de facturation / Adresse de livraison / Adresse
+                 privée / Autre adresse / Particulier seul / Auto-entrepreneur), bien
+                 visible en haut de la fiche, juste à côté du sélecteur Personne/Société. Toute fiche en
+                 porte un, y compris un particulier sans société parente. -->
+            <!-- company_type est dans un conteneur en colonne (d-flex flex-column) :
+                 ajouter le badge juste après le mettrait sur sa propre ligne, en
+                 dessous. On les regroupe donc dans une ligne flex commune pour que
+                 le badge reste à droite du sélecteur Personne/Société. -->
+            <xpath expr="//field[@name='company_type']" position="replace">
+                <div class="d-flex align-items-center flex-wrap gap-2">
+                    <field name="company_type" widget="radio" options="{'horizontal': true}"/>
+                    <field name="partner_role" invisible="not partner_role" widget="badge"
+                           options="{'color_field': 'partner_role_color'}"/>
+                    <field name="partner_role_color" invisible="1"/>
+                </div>
+            </xpath>
+
+            <!-- Norme de nommage : une ligne grise sous le nom rappelle la graphie
+                 attendue, et les avertissements orange ne s'affichent que s'il y a
+                 un écart. Rien n'est bloquant. Les adresses (facturation, livraison,
+                 autre) ne sont pas contrôlées : le calcul renvoie alors des champs
+                 vides, donc les deux lignes restent invisibles. -->
+            <xpath expr="//h1[field[@name='name']]" position="after">
+                <field name="name_warnings" nolabel="1" readonly="1"
+                       class="text-warning small mb-1 o_naming_warning_list"
+                       invisible="not name_warnings"/>
+                <field name="naming_norm_hint" nolabel="1" readonly="1"
+                       class="text-muted small fst-italic mb-0"
+                       groups="base.group_user"
+                       invisible="not naming_norm_hint"/>
+            </xpath>
+
+            <!-- Onglet Contacts : ne montre plus que les adresses et contacts
+                 humains (address_ids, filtré is_company=False côté champ Python -
+                 le "domain" d'un <field> ne filtre PAS l'affichage d'un One2many
+                 côté client, seul le domaine défini sur le champ lui-même est
+                 réellement appliqué). Les sociétés filles sont retirées d'ici et
+                 vivent exclusivement dans l'onglet Filiales ci-dessous. Badge de
+                 rôle ajouté sur chaque carte. -->
+            <xpath expr="//page[@name='contact_addresses']/field[@name='child_ids']" position="replace">
+                <field name="address_ids"
+                       mode="kanban"
+                       context="{'default_parent_id': id, 'default_street': street, 'default_street2': street2, 'default_city': city, 'default_state_id': state_id, 'default_zip': zip, 'default_country_id': country_id, 'default_lang': lang, 'default_user_id': user_id, 'default_type': is_company and 'contact' or 'other'}">
+                    <kanban color="color">
+                        <field name="color"/>
+                        <field name="type"/>
+                        <field name="is_company"/>
+                        <field name="partner_role"/>
+                        <templates>
+                            <t t-name="card" class="flex-row">
+                                <aside class="o_kanban_aside_full">
+                                    <field name="avatar_128" class="o_kanban_image_fill w-100" widget="image" options="{'img_class': 'object-fit-cover'}" alt="Contact image" invisible="type != 'contact'"/>
+                                    <field name="avatar_128" class="o_kanban_image_fill w-100" widget="image" options="{'img_class': 'object-fit-contain p-2'}" alt="Contact image" invisible="type == 'contact'"/>
+                                </aside>
+                                <main class="ps-2 ps-md-0">
+                                    <field name="name" invisible="not name" class="fw-bold"/>
+                                    <field name="type" invisible="name" class="fw-bold"/>
+                                    <!-- Texte en dur, span simple inline (pas de <field> imbriqué,
+                                         qui ajouterait un conteneur bloc étirant le badge sur toute
+                                         la largeur) : le badge se place à droite du nom, ne repasse
+                                         à la ligne que si pas assez de place. -->
+                                    <span t-if="record.partner_role.raw_value == 'contact_reference'" class="badge rounded-pill o_partner_card_role_badge o_badge_color_6">Contact de référence</span>
+                                    <span t-elif="record.partner_role.raw_value == 'invoice'" class="badge rounded-pill o_partner_card_role_badge o_badge_color_3">Adresse de facturation</span>
+                                    <span t-elif="record.partner_role.raw_value == 'delivery'" class="badge rounded-pill o_partner_card_role_badge o_badge_color_4">Adresse de livraison</span>
+                                    <span t-elif="record.partner_role.raw_value == 'private'" class="badge rounded-pill o_partner_card_role_badge o_badge_color_9">Adresse privée</span>
+                                    <span t-elif="record.partner_role.raw_value == 'other'" class="badge rounded-pill o_partner_card_role_badge o_badge_color_5">Autre adresse</span>
+                                    <div t-if="record.email.raw_value" class="text-truncate">
+                                        <i class="fa fa-fw me-1 fa-envelope text-primary" title="Email"/>
+                                        <field name="email"/>
+                                    </div>
+                                    <div t-if="record.phone.raw_value">
+                                        <i class="fa fa-fw me-1 fa-phone text-primary" title="Phone"/>
+                                        <field name="phone"/>
+                                    </div>
+                                    <div invisible="not function or is_company">
+                                        <i class="fa fa-fw me-1 fa-suitcase text-primary" title="Position"/>
+                                        <field name="function"/>
+                                    </div>
+                                    <div t-if="record.type.raw_value != 'contact' and (record.city.raw_value or record.country_id.raw_value)">
+                                        <i class="fa fa-fw me-1 fa-map-marker text-primary" title="Location"/>
+                                        <field name="city"/>
+                                        <span t-if="record.city.raw_value and record.country_id.raw_value">, </span>
+                                        <field name="country_id"/>
+                                    </div>
+                                </main>
+                            </t>
+                        </templates>
+                    </kanban>
+                    <form string="Contact / Address">
+                        <sheet>
+                            <field name="type" required="1" widget="radio" options="{'horizontal': true}"/>
+                            <div class="d-flex align-items-center gap-3">
+                                <field name="image_1920" widget="contact_image" nolabel="1" options="{'preview_image': 'avatar_128', 'size': [100,100], 'img_class': 'rounded border'}"/>
+                                <div class="flex-grow-1">
+                                    <h3>
+                                        <field name="name" class="d-block" string="Name" default_focus="1" required="type == 'contact'" placeholder="e.g. Brandon Freeman"/>
+                                    </h3>
+                                    <div class="row flex-row">
+                                        <div class="d-flex align-items-baseline">
+                                            <i class="fa fa-fw me-1 fa-envelope text-primary" title="Email"/>
+                                            <field name="email" widget="email" class="w-100" context="{'gravatar_image': True}" required="user_ids" placeholder="Email"/>
+                                        </div>
+                                        <div class="d-flex align-items-baseline">
+                                            <i class="fa fa-fw me-1 fa-phone text-primary" title="Phone"/>
+                                            <field name="phone" widget="phone" class="w-100" placeholder="Phone"/>
+                                        </div>
+                                        <div invisible="is_company or type != 'contact'" class="d-flex align-items-baseline">
+                                            <i class="fa fa-fw me-1 fa-suitcase text-primary" title="Position"/>
+                                            <field name="function" placeholder="Job title"/>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <group invisible="type == 'contact'" name="other_info">
+                                <group>
+                                    <span class="o_form_label o_td_label o_address_type">
+                                        <field name="type_address_label" readonly="1" class="fw-bold"/>
+                                    </span>
+                                    <div class="o_address_format" name="div_address">
+                                        <field name="street" placeholder="Street..." class="o_address_street"/>
+                                        <field name="street2" placeholder="Street 2..." class="o_address_street"/>
+                                        <field name="city" placeholder="City" class="o_address_city"/>
+                                        <field name="state_id" class="o_address_state" placeholder="State" options="{'no_open': True, 'no_quick_create': True}" context="{'country_id': country_id, 'default_country_id': country_id, 'zip': zip}"/>
+                                        <field name="zip" placeholder="ZIP" class="o_address_zip"/>
+                                        <field name="country_id" placeholder="Country" class="o_address_country" options='{"no_open": True, "no_create": True}'/>
+                                    </div>
+                                </group>
+                            </group>
+                            <group>
+                                <field name="company_id" invisible="1"/>
+                                <label for="comment"/>
+                                <field name="comment" options="{'height': 100}" placeholder="Internal notes..." nolabel="1"/>
+                            </group>
+                            <field name="lang" invisible="True"/>
+                        </sheet>
+                    </form>
+                </field>
+            </xpath>
+
+            <!-- Onglet Filiales : juste après l'onglet Contacts, uniquement visible
+                 pour les fiches société. Même présentation (kanban) que l'onglet
+                 Contacts, mais sur filiale_ids (filtré is_company=True au niveau du
+                 champ Python, donc réellement effectif). Une filiale de filiale
+                 n'apparaît que dans l'onglet Filiales de sa filiale parente, jamais
+                 sous la société grand-mère (filiale_ids ne contient que les enfants
+                 directs). -->
+            <xpath expr="//page[@name='contact_addresses']" position="after">
+                <page string="Filiales" name="filiales" invisible="not is_company">
+                    <field name="filiale_ids"
+                           mode="kanban"
+                           context="{'default_parent_id': id, 'default_is_company': True, 'default_company_type': 'company', 'default_type': 'other', 'default_lang': lang}">
+                        <kanban color="color">
+                            <field name="color"/>
+                            <field name="is_company"/>
+                            <templates>
+                                <t t-name="card" class="flex-row">
+                                    <aside class="o_kanban_aside_full">
+                                        <field name="avatar_128" class="o_kanban_image_fill w-100" widget="image" options="{'img_class': 'object-fit-contain p-2'}" alt="Filiale"/>
+                                    </aside>
+                                    <main class="ps-2 ps-md-0">
+                                        <field name="name" invisible="not name" class="fw-bold"/>
+                                        <!-- Texte en dur, span simple inline (voir remarque plus haut) -->
+                                        <span class="badge rounded-pill o_partner_card_role_badge o_badge_color_1">Filiale</span>
+                                        <div t-if="record.email.raw_value" class="text-truncate">
+                                            <i class="fa fa-fw me-1 fa-envelope text-primary" title="Email"/>
+                                            <field name="email"/>
+                                        </div>
+                                        <div t-if="record.phone.raw_value">
+                                            <i class="fa fa-fw me-1 fa-phone text-primary" title="Phone"/>
+                                            <field name="phone"/>
+                                        </div>
+                                        <div t-if="record.city.raw_value or record.country_id.raw_value">
+                                            <i class="fa fa-fw me-1 fa-map-marker text-primary" title="Location"/>
+                                            <field name="city"/>
+                                            <span t-if="record.city.raw_value and record.country_id.raw_value">, </span>
+                                            <field name="country_id"/>
+                                        </div>
+                                    </main>
+                                </t>
+                            </templates>
+                        </kanban>
+                    </field>
+                </page>
+            </xpath>
+
         </field>
     </record>
 

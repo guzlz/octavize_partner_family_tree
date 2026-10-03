@@ -21,12 +21,21 @@ pour :
 
 - **voir d'un coup d'œil** la hiérarchie complète d'un compte (société,
   filiales, contacts, adresses) sans naviguer fiche par fiche ;
+- **identifier le rôle de chaque fiche** (société mère, filiale, société
+  seule, contact de référence, adresse de facturation/livraison/privée/
+  autre, particulier seul, auto-entrepreneur) grâce à une étiquette de
+  couleur reprise à l'identique dans l'arbre, les fiches, les listes et
+  les kanbans ;
 - **créer un contact au bon endroit** dans la hiérarchie plutôt qu'en
-  doublon ;
+  doublon, avec un rappel de la norme de nommage attendue (ordre du nom
+  pour une société, "NOM Prénom" pour une personne) ;
 - **réorganiser** une structure de comptes existante (changement de
   parent) sans passer par la vue technique ;
 - **fusionner les doublons** de contacts détectés, en conservant la
   fiche principale et en archivant l'autre ;
+- **repérer un produit saisi deux fois** sur un même devis, commande
+  d'achat, transfert de stock ou facture (ligne colorée, avertissement
+  non bloquant à la saisie) ;
 - **lancer un devis** directement depuis la fiche d'un contact de
   l'arbre, avec les bonnes adresses de facturation/livraison.
 
@@ -75,6 +84,29 @@ gère :
 - **Création de devis** depuis une carte de l'arbre, avec sélection des
   adresses de facturation/livraison (ouvre `sale.order` pré-rempli).
 
+Ajoute par ailleurs à `res.partner` :
+
+- **Étiquette de rôle** (`partner_role`, calculée et stockée) : chaque
+  fiche reçoit automatiquement exactement un rôle parmi société mère /
+  filiale / société seule / contact de référence / adresse de
+  facturation / adresse de livraison / adresse privée / autre adresse /
+  particulier seul / auto-entrepreneur, avec une couleur dédiée
+  (`partner_role_color`) reprise partout dans le back-office.
+- **Onglet "Filiales"** sur la fiche société (`filiale_ids`), distinct
+  de l'onglet Contacts qui ne montre plus que les adresses et contacts
+  humains (`address_ids`).
+- **Norme de nommage des contacts** (modèle `naming.norm`, un
+  enregistrement par cible société/personne, éditable dans
+  Contacts > Configuration > Naming Standards) : rappel non bloquant
+  sous le nom (`naming_norm_hint`) et avertissements en direct
+  (`name_warnings`) sur les fiches société (ordre nom / forme
+  juridique / ville) et personne (graphie "NOM Prénom").
+- **Détection de doublon produit** (mixin
+  `octavize.duplicate.product.mixin`) sur les lignes de devis, commande
+  d'achat, transfert de stock et facture : coloration de la ligne et
+  avertissement à la saisie quand le même produit apparaît deux fois
+  sur un même document. Non bloquant.
+
 ## Impact sur l'instance
 
 Le mode fusion (`performMerge()`) **ne transfère que la hiérarchie
@@ -86,15 +118,19 @@ fusion complet). Voir Limites connues.
 ## Plateforme et prérequis d'installation
 
 - Odoo 19.0, module Community.
-- Dépend de `base`, `contacts`, `web`, `sale` (`sale` est requis pour
-  la création de devis depuis l'arbre ; sans lui, seule cette
-  fonctionnalité ne serait pas disponible, mais elle est déclarée en
-  dépendance dure).
-- Aucun groupe de sécurité dédié : les wizards sont accessibles à tout
-  utilisateur interne (`security/ir.model.access.csv` sans restriction
-  de groupe) ; les droits effectifs suivent ceux déjà en place sur
-  `res.partner`.
-- Aucune configuration préalable requise.
+- Dépend de `base`, `contacts`, `web`, `sale`, `purchase`, `stock`,
+  `account` (`sale` est requis pour la création de devis depuis
+  l'arbre ; `purchase`/`stock`/`account` pour la détection de doublon
+  produit sur les commandes d'achat, les transferts et les factures).
+- Les wizards de l'arbre sont accessibles à tout utilisateur interne
+  (`security/ir.model.access.csv` sans restriction de groupe) ; les
+  droits effectifs suivent ceux déjà en place sur `res.partner`. La
+  configuration de la norme de nommage (`naming.norm`) est réservée au
+  groupe Administration/Settings (`base.group_system`), en lecture
+  seule pour les autres utilisateurs internes.
+- Deux normes de nommage par défaut sont installées (société, personne)
+  et éditables sans redémarrage dans
+  Contacts > Configuration > Naming Standards.
 
 ## Sécurité
 
@@ -114,10 +150,27 @@ s'exécute pas dans le navigateur de l'utilisateur consultant l'arbre.
 - Aucune restriction de groupe sur les wizards de changement de parent,
   création de contact ou fusion — tout utilisateur interne standard
   peut les utiliser ; à restreindre par groupe si besoin en production.
-- `family_tree_controller.js` est un fichier volumineux (~2400 lignes)
+- `family_tree_controller.js` est un fichier volumineux (~2600 lignes)
   concentrant logique de rendu, dialogues et actions — pas de
   découpage en composants OWL séparés.
-- Aucun test automatisé (`tests/` absent).
+- Les tests Python (`tests/`) couvrent la norme de nommage des contacts
+  et la détection de doublon produit ; le test de l'arbre lui-même
+  (`test_family_tree.py`) pilote un vrai navigateur et est taggé
+  `-standard` car Chrome headless ne démarre pas dans tous les
+  environnements de CI.
+
+## Tests
+
+```bash
+odoo-bin -u octavize_partner_family_tree --test-enable --test-tags /octavize_partner_family_tree --stop-after-init --no-http
+```
+
+Le test de l'arbre (navigateur réel) est exclu du tag standard ; le lancer
+séparément sur une machine disposant d'un Chrome headless fonctionnel :
+
+```bash
+odoo-bin -u octavize_partner_family_tree --test-enable --test-tags family_tree_browser --stop-after-init
+```
 
 ## Réutilisation
 

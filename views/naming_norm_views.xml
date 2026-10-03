@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="naming_norm_view_form" model="ir.ui.view">
+        <field name="name">naming.norm.form</field>
+        <field name="model">naming.norm</field>
+        <field name="arch" type="xml">
+            <form string="Naming Standard">
+                <sheet>
+                    <div class="oe_title">
+                        <label for="name"/>
+                        <h1><field name="name" placeholder="Naming standard"/></h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="applies_to"/>
+                            <field name="name_format"/>
+                            <field name="separator"/>
+                        </group>
+                        <group>
+                            <field name="max_length"/>
+                            <field name="hint_line"
+                                   placeholder="Laissé vide, la ligne est construite automatiquement."/>
+                        </group>
+                    </group>
+                    <group string="Rule">
+                        <field name="rule_text" nolabel="1" colspan="2"
+                               placeholder="Full text of the standard, shown under the name."/>
+                    </group>
+                    <group string="Examples">
+                        <field name="examples" nolabel="1" colspan="2"
+                               placeholder="One compliant example per line."/>
+                    </group>
+                    <div class="text-muted small">
+                        This text is the single source of truth: it is shown under the contact
+                        name and used by the naming warnings. Il existe une norme par cible :
+                        fiche société et fiche personne.
+                    </div>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="naming_norm_view_list" model="ir.ui.view">
+        <field name="name">naming.norm.list</field>
+        <field name="model">naming.norm</field>
+        <field name="arch" type="xml">
+            <list string="Naming Standards">
+                <field name="applies_to"/>
+                <field name="name"/>
+                <field name="name_format"/>
+                <field name="max_length"/>
+                <field name="separator"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="action_naming_norm" model="ir.actions.server">
+        <field name="name">Naming Standards</field>
+        <field name="model_id" ref="model_naming_norm"/>
+        <field name="state">code</field>
+        <field name="code">action = model.action_open_norm()</field>
+    </record>
+
+    <menuitem id="menu_naming_norm"
+              name="Naming Standards"
+              parent="contacts.menu_contacts"
+              action="action_naming_norm"
+              groups="base.group_system"
+              sequence="90"/>
+</odoo>

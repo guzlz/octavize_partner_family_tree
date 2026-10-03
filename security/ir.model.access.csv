@@ -1,3 +1,5 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_partner_change_parent_wizard_all,partner.change.parent.wizard.all,model_partner_change_parent_wizard,,1,1,1,1
 access_partner_create_contact_wizard_all,partner.create.contact.wizard.all,model_partner_create_contact_wizard,,1,1,1,1
+access_naming_norm_user,naming.norm.user,model_naming_norm,base.group_user,1,0,0,0
+access_naming_norm_system,naming.norm.system,model_naming_norm,base.group_system,1,1,1,1

@@ -1,0 +1,101 @@
+/* Étiquettes de rôle (Société mère / Filiale / Société seule / Contact de
+ * référence / Adresse de facturation / Adresse de livraison / Adresse privée /
+ * Autre adresse / Particulier seul / Auto-entrepreneur) affichées sur les
+ * fiches, listes et
+ * kanbans de contacts. Couleurs identiques à celles utilisées dans l'arbre
+ * généalogique (voir family_tree.css : .o_company_badge, .o_type_badge.*)
+ * pour une lecture cohérente entre l'arbre et le reste du back-office. */
+
+.o_badge_color_1,
+.o_badge_color_2,
+.o_badge_color_3,
+.o_badge_color_4,
+.o_badge_color_5,
+.o_badge_color_6,
+.o_badge_color_7,
+.o_badge_color_8,
+.o_badge_color_9,
+.o_badge_color_10 {
+    color: #fff !important;
+    border: none;
+    font-weight: 600;
+    /* Toujours un badge compact (largeur du texte), jamais étiré sur toute
+     * la largeur de la carte. Les cartes de contact/filiale utilisent un
+     * conteneur <main> en flex-direction: column, qui étire par défaut
+     * tous ses enfants (align-items: stretch) - y compris un inline-block.
+     * align-self: flex-start est nécessaire pour annuler cet étirement. */
+    display: inline-block !important;
+    align-self: flex-start !important;
+    flex: 0 0 auto !important;
+    width: auto !important;
+    max-width: fit-content !important;
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+/* Filiale - bleu */
+.o_badge_color_1 {
+    background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%) !important;
+}
+
+/* Société mère - bleu foncé */
+.o_badge_color_2 {
+    background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%) !important;
+}
+
+/* Adresse de facturation - cyan */
+.o_badge_color_3 {
+    background: linear-gradient(135deg, #0ea5e9 0%, #38bdf8 100%) !important;
+}
+
+/* Adresse de livraison - orange */
+.o_badge_color_4 {
+    background: linear-gradient(135deg, #f97316 0%, #fb923c 100%) !important;
+}
+
+/* Autre adresse - gris */
+.o_badge_color_5 {
+    background: linear-gradient(135deg, #6b7280 0%, #9ca3af 100%) !important;
+}
+
+/* Contact de référence - vert */
+.o_badge_color_6 {
+    background: linear-gradient(135deg, #10b981 0%, #34d399 100%) !important;
+}
+
+/* Société seule - violet */
+.o_badge_color_7 {
+    background: linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%) !important;
+}
+
+/* Particulier seul - rose */
+.o_badge_color_8 {
+    background: linear-gradient(135deg, #db2777 0%, #f472b6 100%) !important;
+}
+
+/* Adresse privée - ambre */
+.o_badge_color_9 {
+    background: linear-gradient(135deg, #d97706 0%, #fbbf24 100%) !important;
+}
+
+/* Auto-entrepreneur - rose foncé (même famille que "Particulier seul", en plus
+ * soutenu : c'est un particulier qui exerce en son nom propre) */
+.o_badge_color_10 {
+    background: linear-gradient(135deg, #9d174d 0%, #db2777 100%) !important;
+}
+
+/* Étiquette en coin haut-droit des cartes (onglets Contacts/Filiales et
+ * kanban global) - .o_kanban_record est déjà position: relative dans le
+ * CSS standard d'Odoo, donc ce positionnement s'ancre bien sur la carte
+ * entière et non sur un conteneur interne. */
+.o_partner_card_role_badge {
+    position: absolute !important;
+    top: 8px;
+    right: 8px;
+    left: auto !important;
+    margin: 0 !important;
+    z-index: 1;
+    font-size: 10px;
+    padding: 3px 10px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}

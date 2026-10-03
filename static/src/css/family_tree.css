@@ -20,6 +20,14 @@
     transition: transform 0.05s linear;
     transform-origin: 0 0;
     will-change: transform;
+    /* Les généalogies ouvertes sont posées côte à côte sur un même plan : un
+     * arbre est haut et pousse vers la droite, les empiler verticalement
+     * envoyait la seconde hors de l'écran. On se déplace à la souris pour
+     * passer de l'une à l'autre, et le recadrage automatique les fait toutes
+     * tenir à l'écran dès qu'on en ouvre une de plus. */
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
 }
 
 .o_family_tree_wrapper.panning {
@@ -66,8 +74,11 @@
     flex-direction: column;
     align-items: flex-start; /* Aligné à gauche */
     justify-content: flex-start; /* Aligné en haut */
-    min-width: 100%;
-    min-height: 100%;
+    /* Pas de min-width ni de min-height à 100 % : chaque panneau se réduit à la
+     * largeur de son arbre. Sinon, avec plusieurs généalogies côte à côte,
+     * chacune réserverait toute la largeur de la vue et la suivante partirait
+     * très loin à droite. C'est l'enveloppe qui remplit la vue. */
+    width: fit-content;
     padding: 40px 60px;
     z-index: 1;
 }
@@ -754,8 +765,15 @@
     box-shadow: 0 2px 6px rgba(30, 58, 138, 0.3);
 }
 
-.o_company_badge.subsidiary {
+/* Société mère : couleur de base de .o_company_badge (bleu foncé) */
+.o_company_badge.subsidiary,
+.o_company_badge.type-filiale {
     background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);
+}
+
+.o_company_badge.type-societe-seule {
+    background: linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%);
+    box-shadow: 0 2px 6px rgba(124, 58, 237, 0.3);
 }
 
 .o_type_badge {
@@ -770,7 +788,8 @@
     border: 2px solid white;
 }
 
-.o_type_badge.type-contact { 
+.o_type_badge.type-contact,
+.o_type_badge.type-contact-reference { 
     background: linear-gradient(135deg, #10b981 0%, #34d399 100%); 
     box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
 }
@@ -785,6 +804,18 @@
 .o_type_badge.type-other { 
     background: linear-gradient(135deg, #6b7280 0%, #9ca3af 100%); 
     box-shadow: 0 2px 8px rgba(107, 114, 128, 0.3);
+}
+.o_type_badge.type-private { 
+    background: linear-gradient(135deg, #d97706 0%, #fbbf24 100%); 
+    box-shadow: 0 2px 8px rgba(217, 119, 6, 0.3);
+}
+.o_type_badge.type-particulier-seul { 
+    background: linear-gradient(135deg, #db2777 0%, #f472b6 100%); 
+    box-shadow: 0 2px 8px rgba(219, 39, 119, 0.3);
+}
+.o_type_badge.type-auto-entrepreneur { 
+    background: linear-gradient(135deg, #9d174d 0%, #db2777 100%); 
+    box-shadow: 0 2px 8px rgba(157, 23, 77, 0.3);
 }
 
 /* ========== REORGANIZE MODE ========== */
@@ -1352,11 +1383,10 @@
 }
 
 /* Zoom */
-.o_family_tree_container.zoom-50 { transform: scale(0.5); transform-origin: top left; }
-.o_family_tree_container.zoom-75 { transform: scale(0.75); transform-origin: top left; }
-.o_family_tree_container.zoom-100 { transform: scale(1); }
-.o_family_tree_container.zoom-125 { transform: scale(1.25); transform-origin: top left; }
-.o_family_tree_container.zoom-150 { transform: scale(1.5); transform-origin: top left; }
+/* Le zoom est porté par .o_family_tree_wrapper (voir getWrapperStyle) et non
+ * plus par chaque conteneur : une mise à l'échelle CSS ne réduit pas
+ * l'encombrement réel de l'élément, si bien qu'avec plusieurs généalogies la
+ * suivante restait positionnée d'après la largeur non zoomée de la précédente. */
 
 /* Responsive */
 @media (max-width: 992px) {
@@ -1783,4 +1813,162 @@
 /* Hide the quote button when quote mode is active */
 .o_family_tree_view.quote-mode-active .o_create_quote_btn {
     display: none !important;
+}
+
+/* ========== PLUSIEURS GÉNÉALOGIES CÔTE À CÔTE ========== */
+/* Chaque généalogie ouverte occupe son propre panneau, posé à droite du
+ * précédent. Le zoom et le déplacement restent communs, pour qu'un glisser d'un
+ * groupe vers l'autre se fasse dans un repère unique. */
+.o_family_tree_pane {
+    position: relative;
+}
+
+.o_family_tree_pane {
+    flex: 0 0 auto;
+}
+
+.o_family_tree_pane + .o_family_tree_pane {
+    margin-left: 40px;
+    padding-left: 36px;
+    border-left: 2px dashed #cbd5e1;
+}
+
+/* Le repère du SVG : voir le commentaire du template. L'en-tête est en dehors,
+ * sinon les courbes seraient décalées de sa hauteur. */
+.o_family_tree_pane_body {
+    position: relative;
+}
+
+.o_family_tree_pane_header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    padding: 6px 12px;
+    background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+    border-radius: 8px;
+    width: fit-content;
+    max-width: 100%;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+.o_family_tree_pane_header i {
+    color: #64748b;
+}
+
+.o_family_tree_pane_header .o_pane_title {
+    font-weight: 700;
+    font-size: 13px;
+    color: #1e293b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.o_family_tree_pane_header .o_pane_close {
+    border: none;
+    background: transparent;
+    color: #94a3b8;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 6px;
+    line-height: 1;
+}
+
+.o_family_tree_pane_header .o_pane_close:hover {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+/* Bouton « ouvrir à côté » d'un résultat de recherche : discret, révélé au
+ * survol de la ligne, pour ne pas concurrencer le clic principal qui, lui,
+ * ouvre la généalogie seule. */
+
+.o_search_result_item .o_result_add {
+    margin-left: auto;
+    border: 1px solid #c7d2fe;
+    background: #eef2ff;
+    color: #4338ca;
+    cursor: pointer;
+    padding: 4px 10px;
+    border-radius: 6px;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.o_search_result_item .o_result_add:hover {
+    background: #e0e7ff;
+    color: #4338ca;
+}
+
+/* ========== BOUTON RÉORGANISER ========== */
+/* Même gabarit que les boutons Fusion et Devis, en gris-bleu : le mode est
+ * purement visuel (les cartes se déplacent à l'écran, rien n'est enregistré),
+ * il ne mérite donc pas une couleur d'alerte. */
+.o_reorganize_btn {
+    display: flex !important;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px !important;
+    width: auto !important;
+    height: auto !important;
+    transition: all 0.2s ease;
+    background: linear-gradient(135deg, #94a3b8 0%, #64748b 100%) !important;
+    border: none !important;
+    border-radius: 10px !important;
+    color: white !important;
+    box-shadow: 0 2px 8px rgba(100, 116, 139, 0.35);
+}
+
+.o_reorganize_btn:hover {
+    background: linear-gradient(135deg, #64748b 0%, #475569 100%) !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(100, 116, 139, 0.45);
+    color: white !important;
+}
+
+.o_reorganize_btn .fa-arrows {
+    font-size: 16px;
+}
+
+.o_reorganize_btn .o_reorganize_btn_text {
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.o_reorganize_btn.active {
+    background: linear-gradient(135deg, #6366f1 0%, #4338ca 100%) !important;
+    box-shadow: 0 2px 10px rgba(99, 102, 241, 0.45);
+}
+
+.o_reorganize_btn.active:hover {
+    background: linear-gradient(135deg, #4338ca 0%, #3730a3 100%) !important;
+}
+
+/* ========== CIBLES DE RATTACHEMENT (mode Rattacher) ========== */
+/* Pendant un glisser, la fiche survolée dit immédiatement si le dépôt est
+ * possible. Sans ce retour, on relâche au jugé et on découvre le refus dans un
+ * message d'erreur. */
+.o_partner_card.o_drop_target_valid {
+    outline: 3px solid #10b981;
+    outline-offset: 3px;
+    box-shadow: 0 0 0 6px rgba(16, 185, 129, 0.18) !important;
+}
+
+.o_partner_card.o_drop_target_invalid {
+    outline: 3px dashed #cbd5e1;
+    outline-offset: 3px;
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+/* La fiche en cours de déplacement : visible mais clairement « en vol ». */
+.o_tree_node.dragging .o_partner_card {
+    opacity: 0.75;
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.25) !important;
 }

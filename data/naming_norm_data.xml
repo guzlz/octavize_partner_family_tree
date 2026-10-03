@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- noupdate: the wording, the maximum length and the separator are meant to be
+         adjusted by an administrator; a module upgrade must not overwrite them. -->
+    <data noupdate="1">
+        <!-- Fiches société : seule la mise en forme est contrôlée. La raison
+             sociale s'écrit comme la société l'écrit elle-même. -->
+        <record id="naming_norm_contact_company" model="naming.norm">
+            <field name="applies_to">contact_company</field>
+            <field name="name">Norme de nommage - fiche société</field>
+            <field name="name_format">Nom de société + forme juridique + ville si besoin</field>
+            <field name="max_length">0</field>
+            <field name="separator">-</field>
+            <field name="hint_line">Nom de société, puis la forme juridique, puis la ville si besoin.</field>
+            <field name="rule_text">Nom = Nom de société + forme juridique + ville si besoin.
+Le nom de société vient toujours en premier : c'est lui qu'on cherche, et c'est sur lui que se fait le tri.
+La forme juridique (SARL, SAS, SA, EURL...) se place après le nom, jamais devant.
+La ville ne s'ajoute qu'en dernier, et uniquement pour distinguer deux établissements portant le même nom.
+Le nom de société s'écrit comme la société l'écrit elle-même : on ne corrige ni la casse, ni la ponctuation, ni les accents. Pas de limite de longueur.</field>
+            <field name="examples">Acme Corp
+Dupont SARL
+Dupont SARL Bordeaux
+L'Oréal Professionnel</field>
+        </record>
+
+        <!-- Fiches personne : nom de famille en capitales d'abord, prénom en
+             casse normale ensuite. Un auto-entrepreneur complète son nom civil
+             par son nom commercial, après le séparateur. -->
+        <record id="naming_norm_contact_person" model="naming.norm">
+            <field name="applies_to">contact_person</field>
+            <field name="name">Norme de nommage - fiche personne</field>
+            <field name="name_format">NOM Prénom</field>
+            <field name="max_length">80</field>
+            <field name="separator">-</field>
+            <field name="hint_line">NOM Prénom · nom de famille en capitales, puis le prénom · 80 caractères max.</field>
+            <field name="rule_text">Nom = NOM Prénom.
+Nom de famille en capitales, en premier : le tri alphabétique de la liste des contacts se fait alors naturellement sur le nom de famille.
+Prénom en casse normale, en second.
+Les particules font partie du nom de famille et s'écrivent donc aussi en capitales : LE GUEN Marie, DE LA CROIX Anne.
+Auto-entrepreneur : ajouter le nom commercial après « - », par exemple DUPONT Jean - Mon Activité.</field>
+            <field name="examples">DUPONT Jean
+LE GUEN Marie
+DEAL Agnès
+DUPONT Jean - Mon Activité</field>
+        </record>
+    </data>
+</odoo>

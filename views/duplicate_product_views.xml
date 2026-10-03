@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!--
+        Coloration en orange des lignes dont le produit figure déjà sur le
+        document. Le champ is_duplicate_product n'est pas stocké : il sert
+        uniquement de support à decoration-warning et n'est jamais affiché,
+        d'où le column_invisible.
+
+        Important : plusieurs vues standard posent déjà une
+        decoration-warning sur la liste des lignes (produit archivé et
+        avertissement client sur le devis, avertissement fournisseur sur
+        l'achat). On utilise donc add="..." separator=" or ", qui AJOUTE
+        notre condition à l'expression existante au lieu de la remplacer.
+        Recopier l'expression standard en dur fonctionnerait aussi, mais
+        elle deviendrait silencieusement obsolète à la prochaine montée de
+        version d'Odoo — et on perdrait le signal d'origine sans s'en
+        apercevoir. La syntaxe add fonctionne que l'attribut préexiste ou
+        non.
+
+        Les xpath visent la balise <list> plutôt qu'un champ précis, pour ne
+        pas dépendre de l'ordre des colonnes standard.
+    -->
+
+    <record id="view_order_form_duplicate_product" model="ir.ui.view">
+        <field name="name">sale.order.form.duplicate.product</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='order_line']/list" position="attributes">
+                <attribute name="decoration-warning" add="is_duplicate_product" separator=" or "/>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/list" position="inside">
+                <field name="is_duplicate_product" column_invisible="1"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="purchase_order_form_duplicate_product" model="ir.ui.view">
+        <field name="name">purchase.order.form.duplicate.product</field>
+        <field name="model">purchase.order</field>
+        <field name="inherit_id" ref="purchase.purchase_order_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='order_line']/list" position="attributes">
+                <attribute name="decoration-warning" add="is_duplicate_product" separator=" or "/>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/list" position="inside">
+                <field name="is_duplicate_product" column_invisible="1"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_picking_form_duplicate_product" model="ir.ui.view">
+        <field name="name">stock.picking.form.duplicate.product</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='move_ids']/list" position="attributes">
+                <attribute name="decoration-warning" add="is_duplicate_product" separator=" or "/>
+            </xpath>
+            <xpath expr="//field[@name='move_ids']/list" position="inside">
+                <field name="is_duplicate_product" column_invisible="1"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_move_form_duplicate_product" model="ir.ui.view">
+        <field name="name">account.move.form.duplicate.product</field>
+        <field name="model">account.move</field>
+        <field name="inherit_id" ref="account.view_move_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='invoice_line_ids']/list" position="attributes">
+                <attribute name="decoration-warning" add="is_duplicate_product" separator=" or "/>
+            </xpath>
+            <xpath expr="//field[@name='invoice_line_ids']/list" position="inside">
+                <field name="is_duplicate_product" column_invisible="1"/>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>
